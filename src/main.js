@@ -13,7 +13,30 @@ const MS_DAY = 24 * MS_HOUR;
 const MAX_HISTORY = 14 * MS_DAY;
 
 async function main() {
-    await processConnectedRealm(52);
+    let realmIds = [4, 5, 9, 11, 12, 47, 52, 53, 54, 55, 57, 58, 60, 61, 63, 64, 67, 69, 71, 73, 75, 76, 77, 78, 84, 86, 96, 99, 100, 104, 106, 113, 114, 115, 117, 118, 120, 121, 125, 127, 151, 154, 155, 157, 158, 160, 162, 163, 1070, 1071, 1072, 1129, 1136, 1138, 1147, 1151, 1168, 1171, 1175, 1184, 1185, 1190, 1425, 1426, 1427, 1428, 3207, 3208, 3209, 3234, 3661, 3675, 3676, 3678, 3683, 3684, 3685, 3693, 3694, 3721, 3723, 3725, 3726];
+
+    let running = [];
+    for (let realmId, x = 0; realmId = realmIds[x]; x++) {
+        while (running.length >= 4) {
+            let firstFinishedId = await Promise.race(running);
+            let found = false;
+            for (let p, x = 0; p = running[x]; x++) {
+                if (p.realmId === firstFinishedId) {
+                    running.splice(x, 1);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                throw "Could not find realm " + firstFinishedId + " in running array!";
+            }
+        }
+
+        let promise = processConnectedRealm(realmId);
+        promise.realmId = realmId;
+        running.push(promise);
+    }
+    await Promise.all(running);
 }
 
 /**
@@ -72,7 +95,7 @@ function nextExpectedSnapshot(snapshots) {
  * Checks for a new auction house snapshot for the given connected realm, and parses it if available.
  *
  * @param {number} connectedRealmId
- * @return {Promise<void>}
+ * @return {number} The connected realm ID
  */
 async function processConnectedRealm(connectedRealmId) {
     const region = api.REGION_US; // TODO
@@ -84,7 +107,7 @@ async function processConnectedRealm(connectedRealmId) {
         const now = Date.now();
         logMsg("Locked since " + Math.round((now - realmState.locked) / MS_MINUTE) + " minutes ago.", connectedRealmId);
         if (realmState.locked > (now - 2 * MS_HOUR)) {
-            //return;
+            return connectedRealmId;
         }
         logMsg("Ignoring lock.", connectedRealmId);
     }
@@ -92,24 +115,24 @@ async function processConnectedRealm(connectedRealmId) {
     await RealmState.put(connectedRealmId, realmState);
 
     let headers = {};
-    let lastSnapshot;
-    if ((realmState.snapshots || []).length) {
-        lastSnapshot = realmState.snapshots[realmState.snapshots.length - 1];
+    let lastSnapshot = realmState.snapshot;
+    if (lastSnapshot) {
         headers['if-modified-since'] = getHttpDate(new Date(lastSnapshot));
     }
 
-    //const response = await api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId + '/auctions', {}, headers);
+    const response = await api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId + '/auctions', {}, headers);
 
-    const response = {
+    /*const response = {
         status: 200,
         headers: {'last-modified': 'Sat, 14 Nov 2020 20:09:41 GMT'},
         data: JSON.parse(require('fs').readFileSync(require('path').resolve(__dirname, '..', 'auctions.json'))),
     };
+    */
 
     if (response.status === 200) {
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
-        logMsg("Processing " + response.data.auctions.length + " auctions", connectedRealmId);
+        logMsg("Processing " + response.data.auctions.length + " auctions from " + ((Date.now() - thisSnapshot) / MS_SEC) + " seconds ago", connectedRealmId);
         const items = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
 
         realmState.snapshot = thisSnapshot;
@@ -141,6 +164,8 @@ async function processConnectedRealm(connectedRealmId) {
     // TODO: schedule next snapshot
 
     logMsg("Finished", connectedRealmId);
+
+    return connectedRealmId;
 }
 
 /**
