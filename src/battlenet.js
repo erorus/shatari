@@ -26,14 +26,15 @@ module.exports = function () {
     // ------ //
 
     /**
-     * Make an API call to the given path. Returns the parsed response JSON.
+     * Make an API call to the given path. Returns the axios response.
      *
      * @param {string} region
      * @param {string} path
      * @param {object} [params]
-     * @return {object}
+     * @param {object} [headers]
+     * @return {AxiosResponse}
      */
-    this.fetch = async function (region, path, params) {
+    this.fetch = async function (region, path, params, headers) {
         let token = await getClientCredentials();
 
         if (path.substr(0, 1) !== '/') {
@@ -44,18 +45,25 @@ module.exports = function () {
         params.namespace = params.namespace || ('dynamic-' + region);
         params.locale = params.locale || 'en_US';
 
-        const response = await axios({
-            headers: {
-                accept: 'application/json',
-                'accept-encoding': 'gzip',
-                authorization: 'Bearer ' + token,
-            },
+        headers = headers || {};
+        const defaultHeaders = {
+            accept: 'application/json',
+            'accept-encoding': 'gzip',
+            authorization: 'Bearer ' + token,
+        };
+        for (let k in defaultHeaders) {
+            if (defaultHeaders.hasOwnProperty(k) && !headers.hasOwnProperty(k)) {
+                headers[k] = defaultHeaders[k];
+            }
+        }
+
+        return axios({
+            headers: headers,
             httpsAgent: httpsAgent,
             params: params,
             url: 'https://' + region + '.api.blizzard.com' + path,
+            validateStatus: (status) => status < 500,
         });
-
-        return response.data;
     };
 
     // ------- //
