@@ -2,6 +2,7 @@ const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
 const RealmState = require('./realmState');
 const ItemState = require('./itemState');
+const Lock = require('./lock');
 
 const api = new BNet();
 
