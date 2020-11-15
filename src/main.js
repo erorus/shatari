@@ -23,7 +23,7 @@ const realmQueue = {
 async function main() {
     let realmIds = [4, 5, 9, 11, 12, 47, 52, 53, 54, 55, 57, 58, 60, 61, 63, 64, 67, 69, 71, 73, 75, 76, 77, 78, 84, 86, 96, 99, 100, 104, 106, 113, 114, 115, 117, 118, 120, 121, 125, 127, 151, 154, 155, 157, 158, 160, 162, 163, 1070, 1071, 1072, 1129, 1136, 1138, 1147, 1151, 1168, 1171, 1175, 1184, 1185, 1190, 1425, 1426, 1427, 1428, 3207, 3208, 3209, 3234, 3661, 3675, 3676, 3678, 3683, 3684, 3685, 3693, 3694, 3721, 3723, 3725, 3726];
 
-    realmIds = realmIds.slice(30, 40);
+    //realmIds = realmIds.slice(30, 40);
 
     const initRealmCheck = async function (realmId) {
         setPendingTimer(realmId, await RealmState.get(realmId));
@@ -221,6 +221,7 @@ function getHttpDate(date) {
 async function processConnectedRealm(connectedRealmId) {
     const region = api.REGION_US; // TODO
 
+    const startTime = Date.now();
     logMsg("Starting", connectedRealmId);
 
     const realmState = await RealmState.get(connectedRealmId);
@@ -292,7 +293,7 @@ async function processConnectedRealm(connectedRealmId) {
 
     setPendingTimer(connectedRealmId, realmState);
 
-    logMsg("Finished", connectedRealmId);
+    logMsg("Finished after " + ((Date.now() - startTime) / MS_SEC) + " seconds", connectedRealmId);
 
     return connectedRealmId;
 }
