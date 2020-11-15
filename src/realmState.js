@@ -145,7 +145,7 @@ module.exports = new function () {
     // ------- //
 
     /**
-     * Returns the filesystem path to the connected realm's state json file.
+     * Returns the filesystem path to the connected realm's state file.
      *
      * @param {number} connectedRealmId
      * @return {string}
