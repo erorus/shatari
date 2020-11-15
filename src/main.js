@@ -3,9 +3,9 @@ const dateFormat = require('dateformat');
 const RealmState = require('./realmState');
 const ItemState = require('./itemState');
 const GlobalState = require('./globalState');
+const GlobalItemState = require('./globalItemState');
 
 const api = new BNet();
-let globalState;
 
 const MS_SEC = 1000;
 const MS_MINUTE = 60 * MS_SEC;
@@ -21,11 +21,9 @@ const realmQueue = {
 };
 
 async function main() {
-    globalState = await GlobalState.get();
-
     let realmIds = [4, 5, 9, 11, 12, 47, 52, 53, 54, 55, 57, 58, 60, 61, 63, 64, 67, 69, 71, 73, 75, 76, 77, 78, 84, 86, 96, 99, 100, 104, 106, 113, 114, 115, 117, 118, 120, 121, 125, 127, 151, 154, 155, 157, 158, 160, 162, 163, 1070, 1071, 1072, 1129, 1136, 1138, 1147, 1151, 1168, 1171, 1175, 1184, 1185, 1190, 1425, 1426, 1427, 1428, 3207, 3208, 3209, 3234, 3661, 3675, 3676, 3678, 3683, 3684, 3685, 3693, 3694, 3721, 3723, 3725, 3726];
 
-    realmIds = realmIds.slice(10, 20);
+    realmIds = realmIds.slice(30, 40);
 
     const initRealmCheck = async function (realmId) {
         setPendingTimer(realmId, await RealmState.get(realmId));
@@ -282,6 +280,7 @@ async function processConnectedRealm(connectedRealmId) {
         });
 
         await GlobalState.lock();
+        const globalState = await GlobalState.get();
         globalState.snapshots = globalState.snapshots || {};
         globalState.snapshots[connectedRealmId] = thisSnapshot;
         await GlobalState.put(globalState);
@@ -343,6 +342,10 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
         let promise = updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats[itemId]);
         promise.itemId = itemId;
         running.push(promise);
+
+        promise = updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats[itemId]);
+        promise.itemId = 'g' + itemId;
+        running.push(promise);
     }
     await Promise.all(running);
 
@@ -392,6 +395,26 @@ async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
     await ItemState.put(connectedRealmId, itemId, itemState);
 
     return itemId;
+}
+
+/**
+ * Updates the global item state file for the given realm+item and the given stats.
+ *
+ * @param {number} connectedRealmId
+ * @param {number} itemId
+ * @param {number} thisSnapshot
+ * @param {object} stats
+ * @return {string} "g" + itemId
+ */
+async function updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats) {
+    await GlobalItemState.lock(itemId);
+    let globalItemState = await GlobalItemState.get(itemId);
+    globalItemState.current = globalItemState.current || {};
+    globalItemState.current[connectedRealmId] = [thisSnapshot, stats.p, stats.q];
+    await GlobalItemState.put(itemId, globalItemState);
+    GlobalItemState.unlock(itemId);
+
+    return 'g' + itemId;
 }
 
 main().catch(console.error);
