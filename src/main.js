@@ -42,7 +42,26 @@ async function main() {
 }
 
 /**
- * Run periodically to move realms out of the realmQueue to process them.
+ * Prints a message to the log.
+ *
+ * @param {string} message
+ * @param {number} [realm]
+ */
+function logMsg(message, realm) {
+    const date = dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss');
+    if (realm) {
+        message = "Realm " + realm + " " + message;
+    }
+
+    console.log(date + ' ' + message);
+}
+
+//             //
+// Realm Queue //
+//             //
+
+/**
+ * Run periodically to move realms out of the realm queue to process them.
  */
 async function checkPendingRealms() {
     // Fill running queue from pending queue.
@@ -91,30 +110,8 @@ async function checkPendingRealms() {
 }
 
 /**
- * Returns the RFC 2822 date string of the given date, for use in HTTP headers.
- *
- * @param {Date} date
- * @return {string}
+ * Log the status of the realm queue.
  */
-function getHttpDate(date) {
-    return dateFormat(date, 'UTC:ddd, dd mmm yyyy HH:MM:ss') + ' GMT';
-}
-
-/**
- * Prints a message to the log.
- *
- * @param {string} message
- * @param {number} [realm]
- */
-function logMsg(message, realm) {
-    const date = dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss');
-    if (realm) {
-        message = "Realm " + realm + " " + message;
-    }
-
-    console.log(date + ' ' + message);
-}
-
 function logQueueStatus() {
     logMsg('' +
         realmQueue.pending.length + ' realms pending, ' +
@@ -161,6 +158,48 @@ function nextCheckTimestamp(realmState) {
 
     // It's soon.
     return nextSnapshot + 10 * MS_SEC;
+}
+
+/**
+ * Set a timer to put the realm into the pending list at a later time, given its realm state.
+ *
+ * @param {number} connectedRealmId
+ * @param {object} realmState
+ */
+function setPendingTimer(connectedRealmId, realmState) {
+    if (realmQueue.timers[connectedRealmId]) {
+        clearTimeout(realmQueue.timers[connectedRealmId]);
+    }
+    delete realmQueue.timers[connectedRealmId];
+
+    const now = Date.now();
+    const nextCheck = nextCheckTimestamp(realmState);
+    if (nextCheck < now) {
+        realmQueue.pending.push(connectedRealmId);
+
+        return;
+    }
+
+    logMsg("Next check at " + dateFormat(new Date(nextCheck), 'yyyy-mm-dd HH:MM:ss'), connectedRealmId);
+
+    realmQueue.timers[connectedRealmId] = setTimeout(() => {
+        delete realmQueue.timers[connectedRealmId];
+        realmQueue.pending.push(connectedRealmId);
+    }, nextCheck - now);
+}
+
+//                  //
+// Realm Processing //
+//                  //
+
+/**
+ * Returns the RFC 2822 date string of the given date, for use in HTTP headers.
+ *
+ * @param {Date} date
+ * @return {string}
+ */
+function getHttpDate(date) {
+    return dateFormat(date, 'UTC:ddd, dd mmm yyyy HH:MM:ss') + ' GMT';
 }
 
 /**
@@ -294,7 +333,7 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
         }
 
         let itemId = parseInt(itemIdKey);
-        let promise = updateItemJson(connectedRealmId, itemId, thisSnapshot, stats[itemId]);
+        let promise = updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats[itemId]);
         promise.itemId = itemId;
         running.push(promise);
     }
@@ -303,30 +342,8 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
     return stats;
 }
 
-function setPendingTimer(connectedRealmId, realmState) {
-    if (realmQueue.timers[connectedRealmId]) {
-        clearTimeout(realmQueue.timers[connectedRealmId]);
-    }
-    delete realmQueue.timers[connectedRealmId];
-
-    const now = Date.now();
-    const nextCheck = nextCheckTimestamp(realmState);
-    if (nextCheck < now) {
-        realmQueue.pending.push(connectedRealmId);
-
-        return;
-    }
-
-    logMsg("Next check at " + dateFormat(new Date(nextCheck), 'yyyy-mm-dd HH:MM:ss'), connectedRealmId);
-
-    realmQueue.timers[connectedRealmId] = setTimeout(() => {
-        delete realmQueue.timers[connectedRealmId];
-        realmQueue.pending.push(connectedRealmId);
-    }, nextCheck - now);
-}
-
 /**
- * Updates the individual item JSON for the given realm+item and the given stats.
+ * Updates the individual realm's item state file for the given realm+item and the given stats.
  *
  * @param {number} connectedRealmId
  * @param {number} itemId
@@ -334,7 +351,7 @@ function setPendingTimer(connectedRealmId, realmState) {
  * @param {object} stats
  * @return {number} itemId
  */
-async function updateItemJson(connectedRealmId, itemId, thisSnapshot, stats) {
+async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
     const tooOld = thisSnapshot - MAX_HISTORY;
 
     const itemState = await ItemState.get(connectedRealmId, itemId);
