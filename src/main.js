@@ -56,6 +56,26 @@ function logMsg(message, realm) {
     console.log(date + ' ' + message);
 }
 
+/**
+ * Given an array of promises, wait for one to finish, then remove it from the array.
+ *
+ * @param {Promise[]} running
+ * @param {string} idKey
+ * @return {mixed} The id which finished.
+ */
+async function waitForRunner(running, idKey) {
+    let firstFinishedId = await Promise.race(running);
+    for (let p, x = 0; p = running[x]; x++) {
+        if (p[idKey] === firstFinishedId) {
+            running.splice(x, 1);
+
+            return firstFinishedId;
+        }
+    }
+
+    throw "Could not find " + idKey + " " + firstFinishedId + " in running array!";
+}
+
 //             //
 // Realm Queue //
 //             //
@@ -86,18 +106,7 @@ async function checkPendingRealms() {
     while (realmQueue.running.length) {
         logQueueStatus();
 
-        let firstFinishedId = await Promise.race(realmQueue.running);
-        let found = false;
-        for (let p, x = 0; p = realmQueue.running[x]; x++) {
-            if (p.realmId === firstFinishedId) {
-                realmQueue.running.splice(x, 1);
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            throw "Could not find realm " + firstFinishedId + " in running array!";
-        }
+        await waitForRunner(realmQueue.running, 'realmId');
 
         fillRunning();
     }
@@ -318,18 +327,7 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
         }
 
         while (running.length >= 8) {
-            let firstFinishedId = await Promise.race(running);
-            let found = false;
-            for (let p, x = 0; p = running[x]; x++) {
-                if (p.itemId === firstFinishedId) {
-                    running.splice(x, 1);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                throw "Could not find " + firstFinishedId + " in running array!";
-            }
+            await waitForRunner(running, 'itemId');
         }
 
         let itemId = parseInt(itemIdKey);
