@@ -1,7 +1,7 @@
 const https = require('https');
 const axios = require('axios');
 
-const httpsAgent = new https.Agent({keepAlive: true});
+const httpsAgent = new https.Agent({keepAlive: true, maxSockets: 4});
 
 module.exports = function () {
     // ********************* //

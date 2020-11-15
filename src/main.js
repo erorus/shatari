@@ -14,6 +14,9 @@ const MS_DAY = 24 * MS_HOUR;
 
 const MAX_HISTORY = 14 * MS_DAY;
 
+const CONCURRENT_REALM_LIMIT = 4;
+const CONCURRENT_ITEM_LIMIT = 8;
+
 const realmQueue = {
     pending: [],
     running: [],
@@ -87,7 +90,7 @@ async function waitForRunner(running, idKey) {
 async function checkPendingRealms() {
     // Fill running queue from pending queue.
     const fillRunning = function () {
-        while (realmQueue.running.length < 4) {
+        while (realmQueue.running.length < CONCURRENT_REALM_LIMIT) {
             if (!realmQueue.pending.length) {
                 break;
             }
@@ -335,7 +338,7 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
             continue;
         }
 
-        while (running.length >= 8) {
+        while (running.length >= CONCURRENT_ITEM_LIMIT) {
             await waitForRunner(running, 'itemId');
         }
 
