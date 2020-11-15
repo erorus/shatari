@@ -62,7 +62,7 @@ module.exports = function () {
             httpsAgent: httpsAgent,
             params: params,
             url: 'https://' + region + '.api.blizzard.com' + path,
-            validateStatus: (status) => status < 500,
+            validateStatus: (status) => status < 400,
         });
     };
 
