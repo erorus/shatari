@@ -48,6 +48,7 @@ module.exports = new function () {
 
         const result = {};
         result.snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
+        result.lastCheck = buf.readUInt32LE(advance(4)) * MS_SEC;
         result.snapshots = [];
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             result.snapshots.push(buf.readUInt32LE(advance(4)) * MS_SEC);
@@ -81,6 +82,8 @@ module.exports = new function () {
         let bufferSize = 1;
         // 4 bytes for snapshot timestamp
         bufferSize += 4;
+        // 4 bytes for last check timestamp
+        bufferSize += 4;
         // 2 bytes for snapshot list length, then the snapshot list
         bufferSize += 2 + 4 * (state.snapshots || []).length;
         // 2 bytes for summary list length, then lists of id+snapshot+silvers+quantity
@@ -100,6 +103,9 @@ module.exports = new function () {
 
         // Snapshot
         buf.writeUInt32LE((state.snapshot || 0) / MS_SEC, advance(4));
+
+        // Last Check
+        buf.writeUInt32LE((state.lastCheck || 0) / MS_SEC, advance(4));
 
         // List of snapshots
         buf.writeUInt16LE((state.snapshots || []).length, advance(2));

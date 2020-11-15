@@ -12,33 +12,81 @@ const MS_DAY = 24 * MS_HOUR;
 
 const MAX_HISTORY = 14 * MS_DAY;
 
+const realmQueue = {
+    pending: [],
+    running: [],
+    timers: {},
+};
+
 async function main() {
     let realmIds = [4, 5, 9, 11, 12, 47, 52, 53, 54, 55, 57, 58, 60, 61, 63, 64, 67, 69, 71, 73, 75, 76, 77, 78, 84, 86, 96, 99, 100, 104, 106, 113, 114, 115, 117, 118, 120, 121, 125, 127, 151, 154, 155, 157, 158, 160, 162, 163, 1070, 1071, 1072, 1129, 1136, 1138, 1147, 1151, 1168, 1171, 1175, 1184, 1185, 1190, 1425, 1426, 1427, 1428, 3207, 3208, 3209, 3234, 3661, 3675, 3676, 3678, 3683, 3684, 3685, 3693, 3694, 3721, 3723, 3725, 3726];
 
-    realmIds = [52];
+    //realmIds = [4,5,9,52];
 
-    let running = [];
-    for (let realmId, x = 0; realmId = realmIds[x]; x++) {
-        while (running.length >= 4) {
-            let firstFinishedId = await Promise.race(running);
-            let found = false;
-            for (let p, x = 0; p = running[x]; x++) {
-                if (p.realmId === firstFinishedId) {
-                    running.splice(x, 1);
-                    found = true;
-                    break;
-                }
+    const initRealmCheck = async function (realmId) {
+        setPendingTimer(realmId, await RealmState.get(realmId));
+    };
+
+    logMsg("Initializing realm timers.");
+    let initPromises = [];
+    realmIds.forEach(realmId => initPromises.push(initRealmCheck(realmId)));
+    await Promise.all(initPromises);
+    initPromises = undefined;
+    logQueueStatus();
+
+    while (true) {
+        await checkPendingRealms();
+        await (new Promise(resolve => setTimeout(resolve, 5 * MS_SEC)));
+    }
+}
+
+/**
+ * Run periodically to move realms out of the realmQueue to process them.
+ */
+async function checkPendingRealms() {
+    // Fill running queue from pending queue.
+    const fillRunning = function () {
+        while (realmQueue.running.length < 4) {
+            if (!realmQueue.pending.length) {
+                break;
             }
-            if (!found) {
-                throw "Could not find realm " + firstFinishedId + " in running array!";
+
+            let realmId = realmQueue.pending.shift();
+            let promise = processConnectedRealm(realmId);
+            promise.realmId = realmId;
+            realmQueue.running.push(promise);
+        }
+    };
+
+    fillRunning();
+
+    const processedOne = !!realmQueue.running.length;
+
+    // Process running queue.
+    while (realmQueue.running.length) {
+        logQueueStatus();
+
+        let firstFinishedId = await Promise.race(realmQueue.running);
+        let found = false;
+        for (let p, x = 0; p = realmQueue.running[x]; x++) {
+            if (p.realmId === firstFinishedId) {
+                realmQueue.running.splice(x, 1);
+                found = true;
+                break;
             }
         }
+        if (!found) {
+            throw "Could not find realm " + firstFinishedId + " in running array!";
+        }
 
-        let promise = processConnectedRealm(realmId);
-        promise.realmId = realmId;
-        running.push(promise);
+        fillRunning();
     }
-    await Promise.all(running);
+
+    if (processedOne) {
+        logQueueStatus();
+    }
+
+    // Nothing running, nothing pending.
 }
 
 /**
@@ -66,31 +114,52 @@ function logMsg(message, realm) {
     console.log(date + ' ' + message);
 }
 
+function logQueueStatus() {
+    logMsg('' +
+        realmQueue.pending.length + ' realms pending, ' +
+        realmQueue.running.length + ' realms running, ' +
+        Object.keys(realmQueue.timers).length + ' realm timers waiting.'
+    );
+}
+
 /**
- * Returns the timestamp of the next time a snapshot is expected, given an ascending array of snapshot timestamps.
+ * Returns the timestamp of the next time we should check for a snapshot, given a realm state.
  *
- * @param {number[]} snapshots
+ * @param {object} realmState
  * @return {number}
  */
-function nextExpectedSnapshot(snapshots) {
+function nextCheckTimestamp(realmState) {
     const now = Date.now();
 
-    let result = now + MS_HOUR;
-
-    if (snapshots.length >= 2) {
-        let minInterval;
-        for (let x = 1; x < snapshots.length; x++) {
-            let interval = snapshots[x] - snapshots[x - 1];
-            minInterval = minInterval ? Math.min(minInterval, interval) : interval;
-        }
-        result = snapshots[snapshots.length - 1] + minInterval;
+    if (!realmState.lastCheck) {
+        // We never checked this realm before.
+        return now;
     }
 
-    if (result < now) {
-        result = now + 5 * MS_MINUTE;
+    const snapshots = realmState.snapshots || [];
+    let minInterval = 0;
+    for (let x = 1; x < snapshots.length; x++) {
+        let interval = snapshots[x] - snapshots[x - 1];
+        minInterval = minInterval ? Math.min(minInterval, interval) : interval;
+    }
+    const nextSnapshot = realmState.snapshot + minInterval;
+
+    // Don't let us check more frequently than every 5 minutes.
+    const fallback = realmState.lastCheck + 5 * MS_MINUTE;
+
+    if (nextSnapshot < now) {
+        // We're overdue.
+        return Math.max(fallback, now);
     }
 
-    return result;
+    const early = nextSnapshot - 2 * MS_MINUTE;
+    if (early > now) {
+        // It's far in the future. Guess 2 minutes early, to look for a smaller interval.
+        return Math.max(fallback, early);
+    }
+
+    // It's soon.
+    return nextSnapshot + 10 * MS_SEC;
 }
 
 /**
@@ -122,6 +191,7 @@ async function processConnectedRealm(connectedRealmId) {
         headers['if-modified-since'] = getHttpDate(new Date(lastSnapshot));
     }
 
+    realmState.lastCheck = Date.now();
     const response = await api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId + '/auctions', {}, headers);
 
     /*const response = {
@@ -134,7 +204,7 @@ async function processConnectedRealm(connectedRealmId) {
     if (response.status === 200) {
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
-        logMsg("Processing " + response.data.auctions.length + " auctions from " + ((Date.now() - thisSnapshot) / MS_SEC) + " seconds ago", connectedRealmId);
+        logMsg("Processing " + response.data.auctions.length + " auctions from " + Math.round((Date.now() - thisSnapshot) / MS_SEC) + " seconds ago", connectedRealmId);
         const items = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
 
         realmState.snapshot = thisSnapshot;
@@ -163,7 +233,7 @@ async function processConnectedRealm(connectedRealmId) {
     delete realmState.locked;
     await RealmState.put(connectedRealmId, realmState);
 
-    // TODO: schedule next snapshot
+    setPendingTimer(connectedRealmId, realmState);
 
     logMsg("Finished", connectedRealmId);
 
@@ -230,6 +300,28 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
     await Promise.all(running);
 
     return stats;
+}
+
+function setPendingTimer(connectedRealmId, realmState) {
+    if (realmQueue.timers[connectedRealmId]) {
+        clearTimeout(realmQueue.timers[connectedRealmId]);
+    }
+    delete realmQueue.timers[connectedRealmId];
+
+    const now = Date.now();
+    const nextCheck = nextCheckTimestamp(realmState);
+    if (nextCheck < now) {
+        realmQueue.pending.push(connectedRealmId);
+
+        return;
+    }
+
+    logMsg("Next check at " + dateFormat(new Date(nextCheck), 'yyyy-mm-dd HH:MM:ss'), connectedRealmId);
+
+    realmQueue.timers[connectedRealmId] = setTimeout(() => {
+        delete realmQueue.timers[connectedRealmId];
+        realmQueue.pending.push(connectedRealmId);
+    }, nextCheck - now);
 }
 
 /**
