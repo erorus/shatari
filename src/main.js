@@ -21,6 +21,8 @@ const CONCURRENT_REALM_LIMIT = 4;
 const CONCURRENT_ITEM_LIMIT = 8;
 const MAX_ALIVENESS_DELAY = 10 * MS_MINUTE;
 const MAX_RUN_TIME = 6 * MS_HOUR;
+const MAX_SNAPSHOT_INTERVAL = 2 * MS_HOUR;
+const SNAPSHOTS_FOR_INTERVAL = 20;
 
 let aliveness;
 let realmList = {};
@@ -230,10 +232,9 @@ function nextCheckTimestamp(realmState) {
     }
 
     const snapshots = realmState.snapshots || [];
-    let minInterval = 0;
-    for (let x = 1; x < snapshots.length; x++) {
-        let interval = snapshots[x] - snapshots[x - 1];
-        minInterval = minInterval ? Math.min(minInterval, interval) : interval;
+    let minInterval = MAX_SNAPSHOT_INTERVAL;
+    for (let x = Math.max(1, snapshots.length - SNAPSHOTS_FOR_INTERVAL); x < snapshots.length; x++) {
+        minInterval = Math.min(minInterval, snapshots[x] - snapshots[x - 1]);
     }
     const nextSnapshot = realmState.snapshot + minInterval;
 
