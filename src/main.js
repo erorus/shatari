@@ -71,20 +71,43 @@ function logMsg(message, realm) {
  * Given an array of promises, wait for one to finish, then remove it from the array.
  *
  * @param {Promise[]} running
- * @param {string} idKey
- * @return {mixed} The id which finished.
  */
-async function waitForRunner(running, idKey) {
-    let firstFinishedId = await Promise.race(running);
+async function waitForRunner(running) {
+    let toThrow;
+    let foundResolved = false;
+
+    try {
+        await Promise.race(running);
+    } catch (e) {
+        toThrow = e;
+    }
+
     for (let p, x = 0; p = running[x]; x++) {
-        if (p[idKey] === firstFinishedId) {
+        if (p.resolved) {
             running.splice(x, 1);
 
-            return firstFinishedId;
+            foundResolved = true;
+            break;
         }
     }
 
-    throw "Could not find " + idKey + " " + firstFinishedId + " in running array!";
+    if (toThrow) {
+        throw toThrow;
+    } else if (!foundResolved) {
+        throw "Could not find any resolved in running array!";
+    }
+}
+
+/**
+ * Wraps a promise later used by waitForRunner()
+ *
+ * @param {Promise} runner
+ * @return {Promise}
+ */
+function wrapRunner(runner) {
+    let finallyPromise = runner.finally(() => finallyPromise.resolved = true);
+
+    return finallyPromise;
 }
 
 //             //
@@ -103,9 +126,7 @@ async function checkPendingRealms() {
             }
 
             let realmId = realmQueue.pending.shift();
-            let promise = processConnectedRealm(realmId);
-            promise.realmId = realmId;
-            realmQueue.running.push(promise);
+            realmQueue.running.push(wrapRunner(processConnectedRealm(realmId)));
         }
     };
 
@@ -117,7 +138,12 @@ async function checkPendingRealms() {
     while (realmQueue.running.length) {
         logQueueStatus();
 
-        await waitForRunner(realmQueue.running, 'realmId');
+        try {
+            await waitForRunner(realmQueue.running, 'realmId');
+        } catch (e) {
+            logMsg("Error while processing some realm...");
+            console.log(e);
+        }
 
         fillRunning();
     }
@@ -248,7 +274,6 @@ function getHttpDate(date) {
  * Checks for a new auction house snapshot for the given connected realm, and parses it if available.
  *
  * @param {number} connectedRealmId
- * @return {number} The connected realm ID
  */
 async function processConnectedRealm(connectedRealmId) {
     const region = realmList[connectedRealmId];
@@ -264,7 +289,7 @@ async function processConnectedRealm(connectedRealmId) {
         const now = Date.now();
         logMsg("Locked since " + Math.round((now - realmState.locked) / MS_MINUTE) + " minutes ago.", connectedRealmId);
         if (realmState.locked > (now - 2 * MS_HOUR)) {
-            return connectedRealmId;
+            return;
         }
         logMsg("Ignoring lock.", connectedRealmId);
     }
@@ -329,8 +354,6 @@ async function processConnectedRealm(connectedRealmId) {
     setPendingTimer(connectedRealmId, realmState);
 
     logMsg("Finished after " + ((Date.now() - startTime) / MS_SEC) + " seconds", connectedRealmId);
-
-    return connectedRealmId;
 }
 
 /**
@@ -375,13 +398,8 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
         }
 
         let itemId = parseInt(itemIdKey);
-        let promise = updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats[itemId]);
-        promise.itemId = itemId;
-        running.push(promise);
-
-        promise = updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats[itemId]);
-        promise.itemId = 'g' + itemId;
-        running.push(promise);
+        running.push(wrapRunner(updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats[itemId])));
+        running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats[itemId])));
     }
     await Promise.all(running);
 
@@ -395,7 +413,6 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
  * @param {number} itemId
  * @param {number} thisSnapshot
  * @param {object} stats
- * @return {number} itemId
  */
 async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
     const tooOld = thisSnapshot - MAX_HISTORY;
@@ -429,8 +446,6 @@ async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
     itemState.snapshot = thisSnapshot;
 
     await ItemState.put(connectedRealmId, itemId, itemState);
-
-    return itemId;
 }
 
 /**
@@ -440,7 +455,6 @@ async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
  * @param {number} itemId
  * @param {number} thisSnapshot
  * @param {object} stats
- * @return {string} "g" + itemId
  */
 async function updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats) {
     await GlobalItemState.lock(itemId);
@@ -449,8 +463,6 @@ async function updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats) {
     globalItemState.current[connectedRealmId] = [thisSnapshot, stats.p, stats.q];
     await GlobalItemState.put(itemId, globalItemState);
     GlobalItemState.unlock(itemId);
-
-    return 'g' + itemId;
 }
 
 main().catch(console.error);
