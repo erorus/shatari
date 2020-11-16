@@ -33,7 +33,16 @@ module.exports = new function () {
             throw error;
         }
 
-        let buf = await ungzip(compressed);
+        let buf;
+        try {
+            buf = await ungzip(compressed);
+        } catch (e) {
+            console.log("Error unzipping global item " + itemId);
+            console.log(e);
+
+            return {};
+        }
+
         let cursorPosition = 0;
         let advance = function (size) {
             let res = cursorPosition;
