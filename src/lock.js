@@ -1,6 +1,7 @@
 const EventEmitter = require('events');
 
 module.exports = new function () {
+    const self = this;
     const locks = {};
 
     this.acquire = function (name) {
@@ -12,6 +13,7 @@ module.exports = new function () {
             }
             if (!locks[name].locked) {
                 locks[name].locked = true;
+                locks[name].timer = setTimeout(self.release.bind(self, name), 30000);
 
                 return resolve();
             }
@@ -23,6 +25,7 @@ module.exports = new function () {
             const tryAcquire = () => {
                 if (!locks[name].locked) {
                     locks[name].locked = true;
+                    locks[name].timer = setTimeout(self.release.bind(self, name), 30000);
                     locks[name].ee.removeListener('release', tryAcquire);
 
                     return resolve();
@@ -35,6 +38,7 @@ module.exports = new function () {
 
     this.release = function (name) {
         locks[name].locked = false;
+        clearTimeout(locks[name].timer);
         if (locks[name].ee && locks[name].ee.listenerCount('release')) {
             setImmediate(() => locks[name].ee.emit('release'));
         } else {
