@@ -187,7 +187,7 @@ async function checkPendingRealms() {
         logQueueStatus();
 
         try {
-            await waitForRunner(realmQueue.running, 'realmId');
+            await waitForRunner(realmQueue.running);
         } catch (e) {
             logMsg("Error while processing some realm...");
             console.log(e);
@@ -443,7 +443,7 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
         }
 
         while (running.length >= CONCURRENT_ITEM_LIMIT) {
-            await waitForRunner(running, 'itemId');
+            await waitForRunner(running);
         }
 
         let itemId = parseInt(itemIdKey);
@@ -514,4 +514,9 @@ async function updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats) {
     GlobalItemState.unlock(itemId);
 }
 
-main().catch(console.error);
+main().catch(function (e) {
+    console.error("Unhandled exception:");
+    console.error(e);
+
+    process.exit(2);
+});
