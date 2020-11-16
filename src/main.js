@@ -17,6 +17,8 @@ const MAX_HISTORY = 14 * MS_DAY;
 const CONCURRENT_REALM_LIMIT = 4;
 const CONCURRENT_ITEM_LIMIT = 8;
 
+let realmList = {};
+
 const realmQueue = {
     pending: [],
     running: [],
@@ -24,9 +26,14 @@ const realmQueue = {
 };
 
 async function main() {
-    let realmIds = [4, 5, 9, 11, 12, 47, 52, 53, 54, 55, 57, 58, 60, 61, 63, 64, 67, 69, 71, 73, 75, 76, 77, 78, 84, 86, 96, 99, 100, 104, 106, 113, 114, 115, 117, 118, 120, 121, 125, 127, 151, 154, 155, 157, 158, 160, 162, 163, 1070, 1071, 1072, 1129, 1136, 1138, 1147, 1151, 1168, 1171, 1175, 1184, 1185, 1190, 1425, 1426, 1427, 1428, 3207, 3208, 3209, 3234, 3661, 3675, 3676, 3678, 3683, 3684, 3685, 3693, 3694, 3721, 3723, 3725, 3726];
+    realmList = await fetchRealmList();
 
-    //realmIds = realmIds.slice(30, 40);
+    const realmIds = Object.keys(realmList).map(id => parseInt(id));
+    if (!realmIds.length) {
+        logMsg("No realms in list?!");
+
+        return;
+    }
 
     const initRealmCheck = async function (realmId) {
         setPendingTimer(realmId, await RealmState.get(realmId));
@@ -54,7 +61,7 @@ async function main() {
 function logMsg(message, realm) {
     const date = dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss');
     if (realm) {
-        message = "Realm " + realm + " " + message;
+        message = (realmList[realm] || 'unknown').toUpperCase() + " realm " + realm + " " + message;
     }
 
     console.log(date + ' ' + message);
@@ -206,6 +213,28 @@ function setPendingTimer(connectedRealmId, realmState) {
 //                  //
 
 /**
+ * Fetches and returns a full realm list from the API.
+ *
+ * @return {object}
+ */
+async function fetchRealmList() {
+    const regions = [api.REGION_US, api.REGION_EU];
+    const result = {};
+
+    for (let region, x = 0; region = regions[x]; x++) {
+        logMsg("Fetching " + region + " realm list");
+        const response = await api.fetch(region, '/data/wow/connected-realm/index');
+        response.data.connected_realms.forEach(realmRec => {
+            const realmId = realmRec.href.match(/wow\/connected-realm\/(\d+)/)[1];
+
+            result[realmId] = region;
+        });
+    }
+
+    return result;
+}
+
+/**
  * Returns the RFC 2822 date string of the given date, for use in HTTP headers.
  *
  * @param {Date} date
@@ -222,7 +251,10 @@ function getHttpDate(date) {
  * @return {number} The connected realm ID
  */
 async function processConnectedRealm(connectedRealmId) {
-    const region = api.REGION_US; // TODO
+    const region = realmList[connectedRealmId];
+    if (!region) {
+        throw "Could not find region for realm " + connectedRealmId;
+    }
 
     const startTime = Date.now();
     logMsg("Starting", connectedRealmId);
