@@ -1,4 +1,5 @@
 const process = require('process');
+const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
 const RunOnce = require('./runOnce');
@@ -18,8 +19,10 @@ const MAX_HISTORY = 14 * MS_DAY;
 
 const CONCURRENT_REALM_LIMIT = 4;
 const CONCURRENT_ITEM_LIMIT = 8;
-const MAX_RUN_TIME = 3 * MS_HOUR;
+const MAX_ALIVENESS_DELAY = 10 * MS_MINUTE;
+const MAX_RUN_TIME = 6 * MS_HOUR;
 
+let aliveness;
 let realmList = {};
 
 const realmQueue = {
@@ -47,6 +50,7 @@ async function main() {
         logMsg("Over time limit");
         process.exit();
     }, MAX_RUN_TIME + 5 * MS_MINUTE);
+    aliveness = new Aliveness(MAX_ALIVENESS_DELAY);
 
     process.on('beforeExit', () => {
         logMsg("Empty event loop, exiting..");
@@ -63,8 +67,7 @@ async function main() {
     const realmIds = Object.keys(realmList).map(id => parseInt(id));
     if (!realmIds.length) {
         logMsg("No realms in list?!");
-
-        return;
+        process.exit(2);
     }
 
     // Init realm timers.
@@ -91,6 +94,7 @@ async function main() {
         }
     }
 
+    aliveness.close();
     runOnce.finish();
     clearTimeout(lastTimeout);
 }
@@ -176,6 +180,7 @@ async function checkPendingRealms() {
     fillRunning();
 
     const processedOne = !!realmQueue.running.length;
+    aliveness.checkIn();
 
     // Process running queue.
     while (realmQueue.running.length) {
@@ -189,6 +194,7 @@ async function checkPendingRealms() {
         }
 
         fillRunning();
+        aliveness.checkIn();
     }
 
     if (processedOne) {
