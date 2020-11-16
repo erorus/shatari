@@ -1,6 +1,7 @@
 const process = require('process');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
+const RunOnce = require('./runOnce');
 const RealmState = require('./realmState');
 const ItemState = require('./itemState');
 const GlobalState = require('./globalState');
@@ -28,6 +29,19 @@ const realmQueue = {
 };
 
 async function main() {
+    // Run this only once.
+    let runOnce = new RunOnce('shatari');
+    try {
+        await runOnce.start();
+    } catch (e) {
+        if (e === 'Already running') {
+            return;
+        }
+
+        throw e;
+    }
+
+    // Set end time and timeouts
     const endTime = Date.now() + MAX_RUN_TIME;
     const lastTimeout = setTimeout(() => {
         logMsg("Over time limit");
@@ -39,11 +53,13 @@ async function main() {
     });
     process.on('SIGINT', () => {
         logMsg("Received SIGINT");
+        runOnce.finish();
         process.exit(2);
     });
 
+    // Get realm list
     realmList = await fetchRealmList();
-
+    //realmList = {54: 'us'};
     const realmIds = Object.keys(realmList).map(id => parseInt(id));
     if (!realmIds.length) {
         logMsg("No realms in list?!");
@@ -51,10 +67,10 @@ async function main() {
         return;
     }
 
+    // Init realm timers.
     const initRealmCheck = async function (realmId) {
         setPendingTimer(realmId, await RealmState.get(realmId));
     };
-
     logMsg("Initializing realm timers.");
     let initPromises = [];
     realmIds.forEach(realmId => initPromises.push(initRealmCheck(realmId)));
@@ -62,17 +78,20 @@ async function main() {
     initPromises = undefined;
     logQueueStatus();
 
+    // Main loop.
     while (Date.now() < endTime) {
         await checkPendingRealms();
         await (new Promise(resolve => setTimeout(resolve, 5 * MS_SEC)));
     }
 
+    // Clean up timers to exit.
     for (let k in realmQueue.timers) {
         if (realmQueue.timers.hasOwnProperty(k)) {
             clearTimeout(realmQueue.timers[k]);
         }
     }
 
+    runOnce.finish();
     clearTimeout(lastTimeout);
 }
 
