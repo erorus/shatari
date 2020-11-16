@@ -303,14 +303,14 @@ async function processConnectedRealm(connectedRealmId) {
     }
 
     realmState.lastCheck = Date.now();
-    const response = await api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId + '/auctions', {}, headers);
-
-    /*const response = {
-        status: 200,
-        headers: {'last-modified': 'Sat, 14 Nov 2020 20:09:41 GMT'},
-        data: JSON.parse(require('fs').readFileSync(require('path').resolve(__dirname, '..', 'auctions.json'))),
-    };
-    */
+    let response;
+    try {
+        response = await api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId + '/auctions', {}, headers);
+    } catch (e) {
+        response = {status: 500};
+        logMsg("Error during data fetch", connectedRealmId);
+        console.log(e);
+    }
 
     if (response.status === 200) {
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
