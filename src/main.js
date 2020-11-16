@@ -1,3 +1,4 @@
+const process = require('process');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
 const RealmState = require('./realmState');
@@ -16,6 +17,7 @@ const MAX_HISTORY = 14 * MS_DAY;
 
 const CONCURRENT_REALM_LIMIT = 4;
 const CONCURRENT_ITEM_LIMIT = 8;
+const MAX_RUN_TIME = 3 * MS_HOUR;
 
 let realmList = {};
 
@@ -26,6 +28,20 @@ const realmQueue = {
 };
 
 async function main() {
+    const endTime = Date.now() + MAX_RUN_TIME;
+    const lastTimeout = setTimeout(() => {
+        logMsg("Over time limit");
+        process.exit();
+    }, MAX_RUN_TIME + 5 * MS_MINUTE);
+
+    process.on('beforeExit', () => {
+        logMsg("Empty event loop, exiting..");
+    });
+    process.on('SIGINT', () => {
+        logMsg("Received SIGINT");
+        process.exit(2);
+    });
+
     realmList = await fetchRealmList();
 
     const realmIds = Object.keys(realmList).map(id => parseInt(id));
@@ -46,10 +62,18 @@ async function main() {
     initPromises = undefined;
     logQueueStatus();
 
-    while (true) {
+    while (Date.now() < endTime) {
         await checkPendingRealms();
         await (new Promise(resolve => setTimeout(resolve, 5 * MS_SEC)));
     }
+
+    for (let k in realmQueue.timers) {
+        if (realmQueue.timers.hasOwnProperty(k)) {
+            clearTimeout(realmQueue.timers[k]);
+        }
+    }
+
+    clearTimeout(lastTimeout);
 }
 
 /**
@@ -466,4 +490,3 @@ async function updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats) {
 }
 
 main().catch(console.error);
-
