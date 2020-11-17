@@ -58,13 +58,29 @@ async function main() {
     }, MAX_RUN_TIME + 5 * MS_MINUTE);
     aliveness = new Aliveness(MAX_ALIVENESS_DELAY);
 
-    process.on('beforeExit', () => {
-        logMsg("Empty event loop, exiting..");
-    });
+    const clearRealmTimers = () => {
+        for (let k in realmQueue.timers) {
+            if (realmQueue.timers.hasOwnProperty(k)) {
+                clearTimeout(realmQueue.timers[k]);
+                delete realmQueue.timers[k];
+            }
+        }
+        realmQueue.pending = [];
+    };
+
+    let abortLoop = false;
     process.on('SIGINT', () => {
         logMsg("Received SIGINT");
-        runOnce.finish();
-        process.exit(2);
+        abortLoop = true;
+        clearRealmTimers();
+    });
+    process.on('SIGTERM', () => {
+        logMsg("Received SIGTERM");
+        abortLoop = true;
+        clearRealmTimers();
+    });
+    process.on('beforeExit', () => {
+        logMsg("Empty event loop, exiting..");
     });
 
     // Get item list
@@ -95,17 +111,15 @@ async function main() {
     logQueueStatus();
 
     // Main loop.
-    while (Date.now() < endTime) {
+    while (!abortLoop && Date.now() < endTime) {
         await checkPendingRealms();
-        await (new Promise(resolve => setTimeout(resolve, 5 * MS_SEC)));
+        if (!abortLoop) {
+            await (new Promise(resolve => setTimeout(resolve, 3 * MS_SEC)));
+        }
     }
 
     // Clean up timers to exit.
-    for (let k in realmQueue.timers) {
-        if (realmQueue.timers.hasOwnProperty(k)) {
-            clearTimeout(realmQueue.timers[k]);
-        }
-    }
+    clearRealmTimers();
 
     aliveness.close();
     runOnce.finish();
