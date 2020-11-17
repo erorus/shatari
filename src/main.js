@@ -1,4 +1,7 @@
 const process = require('process');
+const fs = require('fs').promises;
+const Path = require('path');
+
 const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
@@ -26,6 +29,7 @@ const SNAPSHOTS_FOR_INTERVAL = 20;
 
 let aliveness;
 let realmList = {};
+let itemList = {};
 
 const realmQueue = {
     pending: [],
@@ -62,6 +66,13 @@ async function main() {
         runOnce.finish();
         process.exit(2);
     });
+
+    // Get item list
+    {
+        let listPath = Path.resolve(__dirname, '..', 'items.json');
+        let listJson = await fs.readFile(listPath);
+        itemList = JSON.parse(listJson);
+    }
 
     // Get realm list
     realmList = await fetchRealmList();
@@ -365,7 +376,6 @@ async function processConnectedRealm(connectedRealmId) {
     if (response.status === 200) {
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
-        logMsg("Processing " + response.data.auctions.length + " auctions from " + Math.round((Date.now() - thisSnapshot) / MS_SEC) + " seconds ago", connectedRealmId);
         const items = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
 
         realmState.snapshot = thisSnapshot;
@@ -417,25 +427,36 @@ async function processConnectedRealm(connectedRealmId) {
 async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
     const stats = {};
     data.auctions.forEach(function (auction) {
-        if (!auction.hasOwnProperty('unit_price')) {
+        const itemId = auction.item.id;
+        if (!itemList[itemId]) {
             return;
         }
 
-        const item = stats[auction.item.id] = stats[auction.item.id] || {
+        const price = auction.unit_price || auction.buyout || auction.bid;
+        const quantity = auction.quantity;
+
+        if (!price || !quantity) {
+            return;
+        }
+
+        const item = stats[itemId] = stats[itemId] || {
             p: 0,
             q: 0,
             auc: {},
         };
-        const price = auction.unit_price;
 
         if (!item.p || item.p > price) {
             item.p = price;
         }
-        item.q += auction.quantity;
-        item.auc[price] = (item.auc[price] || 0) + auction.quantity;
+        item.q += quantity;
+        item.auc[price] = (item.auc[price] || 0) + quantity;
     });
 
-    logMsg("Processing " + Object.keys(stats).length + " items", connectedRealmId);
+    logMsg(
+        "processing " + data.auctions.length + " auctions and saving " + Object.keys(stats).length +
+            " items from " + dateFormat(new Date(thisSnapshot), 'UTC:HH:MM:ss') + '.',
+        connectedRealmId
+    );
 
     let running = [];
     for (let itemIdKey in stats) {
