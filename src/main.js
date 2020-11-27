@@ -15,6 +15,12 @@ const GlobalItemState = require('./globalItemState');
 
 const api = new BNet();
 
+const CLASS_WEAPON = 2;
+const CLASS_ARMOR = 4;
+const CLASSES_EQUIPMENT = [CLASS_WEAPON, CLASS_ARMOR];
+
+const MODIFIER_TYPE_LOOTED_LEVEL = 9;
+
 const MS_SEC = 1000;
 const MS_MINUTE = 60 * MS_SEC;
 const MS_HOUR = 60 * MS_MINUTE;
@@ -444,7 +450,8 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
     const stats = {};
     data.auctions.forEach(function (auction) {
         const itemId = auction.item.id;
-        if (!itemList[itemId]) {
+        const itemData = itemList[itemId];
+        if (!itemData) {
             return;
         }
 
@@ -457,17 +464,42 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
 
         const itemKey = ItemKeySerialize.stringify(ItemKey.get(auction.item));
 
-        const item = stats[itemKey] = stats[itemKey] || {
-            p: 0,
-            q: 0,
-            auc: {},
-        };
+        if (!stats[itemKey]) {
+            stats[itemKey] = {
+                p: 0,
+                q: 0,
+            };
+            if (CLASSES_EQUIPMENT.includes(itemData['class'])) {
+                stats[itemKey].specifics = [];
+            } else {
+                stats[itemKey].auc = {};
+            }
+        }
+
+        const item = stats[itemKey];
 
         if (!item.p || item.p > price) {
             item.p = price;
         }
         item.q += quantity;
-        item.auc[price] = (item.auc[price] || 0) + quantity;
+
+        if (item.auc) {
+            item.auc[price] = (item.auc[price] || 0) + quantity;
+        }
+        if (item.specifics) {
+            const spec = {
+                price: price,
+                bonuses: auction.item.bonus_lists || [],
+                lootedLevel: 0,
+            };
+            (auction.item.modifiers || []).forEach(modifier => {
+                if (modifier.type === MODIFIER_TYPE_LOOTED_LEVEL) {
+                    spec.lootedLevel = modifier.value;
+                }
+            });
+            spec.bonuses.sort((a, b) => a - b);
+            item.specifics.push(spec);
+        }
     });
 
     logMsg(
@@ -517,6 +549,12 @@ async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
     itemState.auctions.sort(function (a, b) {
         return a.p - b.p;
     });
+
+    itemState.specifics = [];
+    (stats.specifics || []).forEach(spec => {
+        itemState.specifics.push([spec.price, spec.lootedLevel, spec.bonuses]);
+    });
+    itemState.specifics.sort((a, b) => (a[0] - b[0] || a[1] - b[1]));
 
     itemState.snapshots = itemState.snapshots || [];
     for (let snapshot, x = 0; snapshot = itemState.snapshots[x]; x++) {

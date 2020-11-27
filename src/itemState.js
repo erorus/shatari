@@ -9,7 +9,7 @@ const DATA_DIR = Path.resolve(__dirname, '..', 'data');
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
-    const VERSION = 1;
+    const VERSION = 2;
 
     // ------ //
     // PUBLIC //
@@ -54,7 +54,10 @@ module.exports = new function () {
         };
 
         const version = buf.readUInt8(advance(1));
-        if (version !== VERSION) {
+        let noSpecifics = false;
+        if (version === 1) {
+            noSpecifics = true;
+        } else if (version !== VERSION) {
             throw "Unsupported version: " + version;
         }
 
@@ -69,6 +72,21 @@ module.exports = new function () {
                 buf.readUInt32LE(advance(4)) * COPPER_SILVER,
                 buf.readUInt32LE(advance(4)),
             ]);
+        }
+
+        result.specifics = [];
+        if (!noSpecifics) {
+            for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+                let specData = [
+                    buf.readUInt32LE(advance(4)) * COPPER_SILVER,
+                    buf.readUInt8(advance(1)),
+                    []
+                ];
+                for (let remainingBonuses = buf.readUInt8(advance(1)); remainingBonuses > 0; remainingBonuses--) {
+                    specData[2].push(buf.readUInt16LE(advance(2)))
+                }
+                result.specifics.push(specData);
+            }
         }
 
         result.snapshots = [];
@@ -106,6 +124,13 @@ module.exports = new function () {
         // 2 bytes for snapshot list length, then lists of snapshot+silvers+quantity
         bufferSize += 2 + (4 + 4 + 4) * (state.snapshots || []).length;
 
+        // 2 bytes for specifics list length
+        bufferSize += 2;
+        (state.specifics || []).forEach(spec => {
+            // 4 bytes for price, 1 byte for looted level, 1 byte for bonus list length, then 2 bytes per bonus
+            bufferSize += 4 + 1 + 1 + 2 * spec[2].length;
+        });
+
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
         let advance = function (size) {
@@ -128,6 +153,17 @@ module.exports = new function () {
         (state.auctions || []).forEach((auction) => {
             buf.writeUInt32LE(auction[0] / COPPER_SILVER, advance(4));
             buf.writeUInt32LE(auction[1], advance(4));
+        });
+
+        // Specifics list
+        buf.writeUInt16LE((state.specifics || []).length, advance(2));
+        (state.specifics || []).forEach(spec => {
+            buf.writeUInt32LE(spec[0] / COPPER_SILVER, advance(4));
+            buf.writeUInt8(spec[1], advance(1));
+            buf.writeUInt8(spec[2].length, advance(1));
+            spec[2].forEach(bonus => {
+                buf.writeUInt16LE(bonus, advance(2));
+            });
         });
 
         // Snapshot list
