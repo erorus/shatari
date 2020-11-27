@@ -3,6 +3,8 @@ const fs = require('fs').promises;
 const Path = require('path');
 const {gzip, ungzip} = require('node-gzip');
 
+const ItemKeySerialize = require('./itemKeySerialize');
+
 const DATA_DIR = Path.resolve(__dirname, '..', 'data');
 
 module.exports = new function () {
@@ -17,11 +19,11 @@ module.exports = new function () {
     /**
      * Reads from disk and returns the item's state object for all realms.
      *
-     * @param {number} itemId
+     * @param {string} itemKey
      * @return {object}
      */
-    this.get = async function (itemId) {
-        const path = getPath(itemId);
+    this.get = async function (itemKey) {
+        const path = getPath(itemKey);
         let compressed;
         try {
             compressed = await fs.readFile(path);
@@ -37,7 +39,7 @@ module.exports = new function () {
         try {
             buf = await ungzip(compressed);
         } catch (e) {
-            console.log("Error unzipping global item " + itemId);
+            console.log("Error unzipping global item " + itemKey);
             console.log(e);
 
             return {};
@@ -77,19 +79,19 @@ module.exports = new function () {
     /**
      * Place an exclusive lock on the file for the given item.
      *
-     * @param {number} itemId
+     * @param {string} itemKey
      * @return {Promise}
      */
-    this.lock = (itemId) => Lock.acquire(itemId);
+    this.lock = (itemKey) => Lock.acquire(itemKey);
 
     /**
      * Writes to disk the given state for the item on all connected realms.
      *
-     * @param {number} itemId
+     * @param {string} itemKey
      * @param {object} state
      */
-    this.put = async function (itemId, state) {
-        const path = getPath(itemId);
+    this.put = async function (itemKey, state) {
+        const path = getPath(itemKey);
 
         // Start off with version number in front.
         let bufferSize = 1;
@@ -145,7 +147,7 @@ module.exports = new function () {
     /**
      * Remove an exclusive lock on the file.
      */
-    this.unlock = (itemId) => Lock.release(itemId);
+    this.unlock = (itemKey) => Lock.release(itemKey);
 
     // ------- //
     // PRIVATE //
@@ -154,10 +156,12 @@ module.exports = new function () {
     /**
      * Returns the filesystem path to the global item's state file.
      *
-     * @param {number} itemId
+     * @param {string} itemKey
      * @return {string}
      */
-    function getPath(itemId) {
-        return Path.resolve(DATA_DIR, 'global', '' + (itemId & 0xFF), '' + itemId + '.bin');
+    function getPath(itemKey) {
+        const itemId = ItemKeySerialize.parse(itemKey).itemId;
+
+        return Path.resolve(DATA_DIR, 'global', '' + (itemId & 0xFF), '' + itemKey + '.bin');
     }
 };

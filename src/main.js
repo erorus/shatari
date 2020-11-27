@@ -6,6 +6,8 @@ const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
 const RunOnce = require('./runOnce');
+const ItemKey = require('./itemKey');
+const ItemKeySerialize = require('./itemKeySerialize');
 const RealmState = require('./realmState');
 const ItemState = require('./itemState');
 const GlobalState = require('./globalState');
@@ -394,12 +396,12 @@ async function processConnectedRealm(connectedRealmId) {
 
         realmState.snapshot = thisSnapshot;
         realmState.summary = realmState.summary || {};
-        for (let itemId in items) {
-            if (!items.hasOwnProperty(itemId)) {
+        for (let itemKey in items) {
+            if (!items.hasOwnProperty(itemKey)) {
                 continue;
             }
 
-            realmState.summary[itemId] = [thisSnapshot, items[itemId].p, items[itemId].q];
+            realmState.summary[itemKey] = [thisSnapshot, items[itemKey].p, items[itemKey].q];
         }
 
         const tooOld = thisSnapshot - MAX_HISTORY;
@@ -436,7 +438,7 @@ async function processConnectedRealm(connectedRealmId) {
  * @param {number} connectedRealmId
  * @param {number} thisSnapshot
  * @param {object} data  The parsed JSON response from the API
- * @return {object} All the item stats from the snapshot, keyed by item ID.
+ * @return {object} All the item stats from the snapshot, keyed by item key.
  */
 async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
     const stats = {};
@@ -453,7 +455,9 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
             return;
         }
 
-        const item = stats[itemId] = stats[itemId] || {
+        const itemKey = ItemKeySerialize.stringify(ItemKey.get(auction.item));
+
+        const item = stats[itemKey] = stats[itemKey] || {
             p: 0,
             q: 0,
             auc: {},
@@ -473,8 +477,8 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
     );
 
     let running = [];
-    for (let itemIdKey in stats) {
-        if (!stats.hasOwnProperty(itemIdKey)) {
+    for (let itemKey in stats) {
+        if (!stats.hasOwnProperty(itemKey)) {
             continue;
         }
 
@@ -482,9 +486,8 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
             await waitForRunner(running);
         }
 
-        let itemId = parseInt(itemIdKey);
-        running.push(wrapRunner(updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats[itemId])));
-        running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats[itemId])));
+        running.push(wrapRunner(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
+        running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
     }
     await Promise.all(running);
 
@@ -495,14 +498,14 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
  * Updates the individual realm's item state file for the given realm+item and the given stats.
  *
  * @param {number} connectedRealmId
- * @param {number} itemId
+ * @param {string} itemKey
  * @param {number} thisSnapshot
  * @param {object} stats
  */
-async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
+async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
     const tooOld = thisSnapshot - MAX_HISTORY;
 
-    const itemState = await ItemState.get(connectedRealmId, itemId);
+    const itemState = await ItemState.get(connectedRealmId, itemKey);
 
     itemState.auctions = [];
     for (let price in stats.auc) {
@@ -530,24 +533,24 @@ async function updateRealmItem(connectedRealmId, itemId, thisSnapshot, stats) {
     itemState.quantity = stats.q;
     itemState.snapshot = thisSnapshot;
 
-    await ItemState.put(connectedRealmId, itemId, itemState);
+    await ItemState.put(connectedRealmId, itemKey, itemState);
 }
 
 /**
  * Updates the global item state file for the given realm+item and the given stats.
  *
  * @param {number} connectedRealmId
- * @param {number} itemId
+ * @param {string} itemKey
  * @param {number} thisSnapshot
  * @param {object} stats
  */
-async function updateGlobalItem(connectedRealmId, itemId, thisSnapshot, stats) {
-    await GlobalItemState.lock(itemId);
-    let globalItemState = await GlobalItemState.get(itemId);
+async function updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats) {
+    await GlobalItemState.lock(itemKey);
+    let globalItemState = await GlobalItemState.get(itemKey);
     globalItemState.current = globalItemState.current || {};
     globalItemState.current[connectedRealmId] = [thisSnapshot, stats.p, stats.q];
-    await GlobalItemState.put(itemId, globalItemState);
-    GlobalItemState.unlock(itemId);
+    await GlobalItemState.put(itemKey, globalItemState);
+    GlobalItemState.unlock(itemKey);
 }
 
 main().catch(function (e) {

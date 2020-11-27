@@ -2,6 +2,8 @@ const fs = require('fs').promises;
 const Path = require('path');
 const {gzip, ungzip} = require('node-gzip');
 
+const ItemKeySerialize = require('./itemKeySerialize');
+
 const DATA_DIR = Path.resolve(__dirname, '..', 'data');
 
 module.exports = new function () {
@@ -17,11 +19,11 @@ module.exports = new function () {
      * Reads from disk and returns the local state object for the given connected realm's item.
      *
      * @param {number} connectedRealmId
-     * @param {number} itemId
+     * @param {string} itemKey
      * @return {object}
      */
-    this.get = async function (connectedRealmId, itemId) {
-        const path = getPath(connectedRealmId, itemId);
+    this.get = async function (connectedRealmId, itemKey) {
+        const path = getPath(connectedRealmId, itemKey);
         let compressed;
         try {
             compressed = await fs.readFile(path);
@@ -37,7 +39,7 @@ module.exports = new function () {
         try {
             buf = await ungzip(compressed);
         } catch (e) {
-            console.log("Realm " + connectedRealmId + " Error unzipping item " + itemId);
+            console.log("Realm " + connectedRealmId + " Error unzipping item " + itemKey);
             console.log(e);
 
             return {};
@@ -89,11 +91,11 @@ module.exports = new function () {
      * Writes to disk the given state for the given connected realm's item.
      *
      * @param {number} connectedRealmId
-     * @param {number} itemId
+     * @param {string} itemKey
      * @param {object} state
      */
-    this.put = async function (connectedRealmId, itemId, state) {
-        const path = getPath(connectedRealmId, itemId);
+    this.put = async function (connectedRealmId, itemKey, state) {
+        const path = getPath(connectedRealmId, itemKey);
 
         // Start off with version number in front.
         let bufferSize = 1;
@@ -166,10 +168,12 @@ module.exports = new function () {
      * Returns the filesystem path to the connected realm's item's state file.
      *
      * @param {number} connectedRealmId
-     * @param {number} itemId
+     * @param {string} itemKey
      * @return {string}
      */
-    function getPath(connectedRealmId, itemId) {
-        return Path.resolve(DATA_DIR, '' + connectedRealmId, '' + (itemId & 0xFF), '' + itemId + '.bin');
+    function getPath(connectedRealmId, itemKey) {
+        const itemId = ItemKeySerialize.parse(itemKey).itemId;
+
+        return Path.resolve(DATA_DIR, '' + connectedRealmId, '' + (itemId & 0xFF), '' + itemKey + '.bin');
     }
 };

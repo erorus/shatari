@@ -2,12 +2,14 @@ const fs = require('fs').promises;
 const Path = require('path');
 const {gzip, ungzip} = require('node-gzip');
 
+const ItemKeySerialize = require('./itemKeySerialize');
+
 const DATA_DIR = Path.resolve(__dirname, '..', 'data');
 
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
-    const VERSION = 1;
+    const VERSION = 2;
 
     // ------ //
     // PUBLIC //
@@ -51,7 +53,10 @@ module.exports = new function () {
         };
 
         const version = buf.readUInt8(advance(1));
-        if (version !== VERSION) {
+        let simpleItemKey = false;
+        if (version === 1) {
+            simpleItemKey = true;
+        } else if (version !== VERSION) {
             throw "Unsupported version: " + version;
         }
 
@@ -64,11 +69,20 @@ module.exports = new function () {
         }
         result.summary = {};
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
-            let itemId = buf.readUInt32LE(advance(4));
+            let itemKey = {
+                itemId: buf.readUInt32LE(advance(4)),
+                itemLevel: 0,
+                itemSuffix: 0,
+            };
+            if (!simpleItemKey) {
+                itemKey.itemLevel = buf.readUInt16LE(advance(2));
+                itemKey.itemSuffix = buf.readUInt16LE(advance(2));
+            }
+            let itemKeyString = ItemKeySerialize.stringify(itemKey);
             let snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
             let price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;
             let quantity = buf.readUInt32LE(advance(4));
-            result.summary[itemId] = [snapshot, price, quantity];
+            result.summary[itemKeyString] = [snapshot, price, quantity];
         }
 
         if (cursorPosition !== buf.length) {
@@ -95,8 +109,8 @@ module.exports = new function () {
         bufferSize += 4;
         // 2 bytes for snapshot list length, then the snapshot list
         bufferSize += 2 + 4 * (state.snapshots || []).length;
-        // 2 bytes for summary list length, then lists of id+snapshot+silvers+quantity
-        bufferSize += 2 + (4 + 4 + 4 + 4) * Object.keys(state.summary || {}).length;
+        // 2 bytes for summary list length, then lists of id+level+suffix+snapshot+silvers+quantity
+        bufferSize += 2 + (4 + 2 + 2 + 4 + 4 + 4) * Object.keys(state.summary || {}).length;
 
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
@@ -123,14 +137,18 @@ module.exports = new function () {
         // Summary list
         let summary = state.summary || {};
         buf.writeUInt16LE(Object.keys(summary).length, advance(2));
-        for (let itemId in summary) {
-            if (!summary.hasOwnProperty(itemId)) {
+        for (let itemKeyString in summary) {
+            if (!summary.hasOwnProperty(itemKeyString)) {
                 continue;
             }
-            buf.writeUInt32LE(parseInt(itemId), advance(4));
-            buf.writeUInt32LE(summary[itemId][0] / MS_SEC, advance(4));
-            buf.writeUInt32LE(summary[itemId][1] / COPPER_SILVER, advance(4));
-            buf.writeUInt32LE(summary[itemId][2], advance(4));
+            let itemKey = ItemKeySerialize.parse(itemKeyString);
+
+            buf.writeUInt32LE(itemKey.itemId, advance(4));
+            buf.writeUInt16LE(itemKey.itemLevel, advance(2));
+            buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
+            buf.writeUInt32LE(summary[itemKeyString][0] / MS_SEC, advance(4));
+            buf.writeUInt32LE(summary[itemKeyString][1] / COPPER_SILVER, advance(4));
+            buf.writeUInt32LE(summary[itemKeyString][2], advance(4));
         }
 
         if (cursorPosition !== bufferSize) {
