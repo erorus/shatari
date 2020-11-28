@@ -487,17 +487,18 @@ async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, dat
             item.auc[price] = (item.auc[price] || 0) + quantity;
         }
         if (item.specifics) {
-            const spec = {
-                price: price,
-                bonuses: auction.item.bonus_lists || [],
-                lootedLevel: 0,
-            };
-            (auction.item.modifiers || []).forEach(modifier => {
-                if (modifier.type === MODIFIER_TYPE_LOOTED_LEVEL) {
-                    spec.lootedLevel = modifier.value;
-                }
-            });
-            spec.bonuses.sort((a, b) => a - b);
+            const spec = [
+                price,
+                0,
+                auction.item.bonus_lists || [],
+            ];
+            if (auction.item.modifiers) {
+                auction.item.modifiers.forEach(modifier => {
+                    if (modifier.type === MODIFIER_TYPE_LOOTED_LEVEL) {
+                        spec[1] = modifier.value;
+                    }
+                });
+            }
             item.specifics.push(spec);
         }
     });
@@ -547,10 +548,7 @@ async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
         itemState.auctions.push([parseInt(price), stats.auc[price]]);
     }
 
-    itemState.specifics = [];
-    (stats.specifics || []).forEach(spec => {
-        itemState.specifics.push([spec.price, spec.lootedLevel, spec.bonuses]);
-    });
+    itemState.specifics = stats.specifics;
 
     itemState.snapshots = itemState.snapshots || [];
     let snapshot;
