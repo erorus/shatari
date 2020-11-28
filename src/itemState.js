@@ -91,7 +91,7 @@ module.exports = new function () {
 
         result.snapshots = [];
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
-            result.auctions.push([
+            result.snapshots.push([
                 buf.readUInt32LE(advance(4)) * MS_SEC,
                 buf.readUInt32LE(advance(4)) * COPPER_SILVER,
                 buf.readUInt32LE(advance(4)),
