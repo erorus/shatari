@@ -1,4 +1,5 @@
 const process = require('process');
+const cp = require('child_process');
 const fs = require('fs').promises;
 const Path = require('path');
 
@@ -6,20 +7,10 @@ const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
 const RunOnce = require('./runOnce');
-const ItemKey = require('./itemKey');
-const ItemKeySerialize = require('./itemKeySerialize');
 const RealmState = require('./realmState');
-const ItemState = require('./itemState');
 const GlobalState = require('./globalState');
-const GlobalItemState = require('./globalItemState');
 
 const api = new BNet();
-
-const CLASS_WEAPON = 2;
-const CLASS_ARMOR = 4;
-const CLASSES_EQUIPMENT = [CLASS_WEAPON, CLASS_ARMOR];
-
-const MODIFIER_TYPE_LOOTED_LEVEL = 9;
 
 const MS_SEC = 1000;
 const MS_MINUTE = 60 * MS_SEC;
@@ -28,8 +19,8 @@ const MS_DAY = 24 * MS_HOUR;
 
 const MAX_HISTORY = 14 * MS_DAY;
 
-const CONCURRENT_REALM_LIMIT = 2;
-const CONCURRENT_ITEM_LIMIT = 8;
+const CONCURRENT_REALM_LIMIT = 4;
+
 const MAX_ALIVENESS_DELAY = 10 * MS_MINUTE;
 const MAX_RUN_TIME = 6 * MS_HOUR;
 const MAX_SNAPSHOT_INTERVAL = 2 * MS_HOUR;
@@ -446,139 +437,39 @@ async function processConnectedRealm(connectedRealmId) {
  * @param {object} data  The parsed JSON response from the API
  * @return {object} All the item stats from the snapshot, keyed by item key.
  */
-async function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
-    const stats = {};
-    data.auctions.forEach(function (auction) {
-        const itemId = auction.item.id;
-        const itemData = itemList[itemId];
-        if (!itemData) {
-            return;
-        }
+function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
+    logMsg("Sending " + (data.auctions || []).length + " auctions to child", connectedRealmId);
 
-        const price = auction.unit_price || auction.buyout || auction.bid;
-        const quantity = auction.quantity;
+    return new Promise((resolve, reject) => {
+        const child = cp.fork(`${__dirname}/realmProcess.js`);
 
-        if (!price || !quantity) {
-            return;
-        }
-
-        const itemKey = ItemKeySerialize.stringify(ItemKey.get(auction.item));
-
-        if (!stats[itemKey]) {
-            stats[itemKey] = {
-                p: 0,
-                q: 0,
-            };
-            if (CLASSES_EQUIPMENT.includes(itemData['class'])) {
-                stats[itemKey].specifics = [];
+        child.on('message', m => {
+            if (m.action === 'finish') {
+                logMsg("Received " + Object.keys(m.data).length + " items back from child", connectedRealmId);
+                resolve(m.data);
             } else {
-                stats[itemKey].auc = {};
+                logMsg("Unknown message!", connectedRealmId);
+                console.log(m);
+                reject();
             }
-        }
+        });
 
-        const item = stats[itemKey];
+        child.on('error', err => {
+            logMsg("Error spawning child", connectedRealmId);
+            reject(err);
+        });
 
-        if (!item.p || item.p > price) {
-            item.p = price;
-        }
-        item.q += quantity;
-
-        if (item.auc) {
-            item.auc[price] = (item.auc[price] || 0) + quantity;
-        }
-        if (item.specifics) {
-            const spec = [
-                price,
-                0,
-                auction.item.bonus_lists || [],
-            ];
-            if (auction.item.modifiers) {
-                auction.item.modifiers.forEach(modifier => {
-                    if (modifier.type === MODIFIER_TYPE_LOOTED_LEVEL) {
-                        spec[1] = modifier.value;
-                    }
-                });
+        child.send({
+            action: 'start',
+            data: {
+                realmList: realmList,
+                itemList: itemList,
+                connectedRealmId: connectedRealmId,
+                thisSnapshot: thisSnapshot,
+                data: data,
             }
-            item.specifics.push(spec);
-        }
+        });
     });
-
-    logMsg(
-        "processing " + data.auctions.length + " auctions and saving " + Object.keys(stats).length +
-            " items from " + dateFormat(new Date(thisSnapshot), 'UTC:HH:MM:ss') + '.',
-        connectedRealmId
-    );
-
-    let running = [];
-    for (let itemKey in stats) {
-        if (!stats.hasOwnProperty(itemKey)) {
-            continue;
-        }
-
-        while (running.length >= CONCURRENT_ITEM_LIMIT) {
-            await waitForRunner(running);
-        }
-
-        running.push(wrapRunner(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
-        running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
-    }
-    await Promise.all(running);
-
-    return stats;
-}
-
-/**
- * Updates the individual realm's item state file for the given realm+item and the given stats.
- *
- * @param {number} connectedRealmId
- * @param {string} itemKey
- * @param {number} thisSnapshot
- * @param {object} stats
- */
-async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
-    const tooOld = thisSnapshot - MAX_HISTORY;
-
-    const itemState = await ItemState.get(connectedRealmId, itemKey);
-
-    itemState.auctions = [];
-    for (let price in stats.auc) {
-        if (!stats.auc.hasOwnProperty(price)) {
-            continue;
-        }
-        itemState.auctions.push([parseInt(price), stats.auc[price]]);
-    }
-
-    itemState.specifics = stats.specifics;
-
-    itemState.snapshots = itemState.snapshots || [];
-    let snapshot;
-    while ((snapshot = itemState.snapshots[0]) && snapshot[0] < tooOld) {
-        itemState.snapshots.splice(0, 1);
-    }
-    itemState.snapshots.push([thisSnapshot, stats.p, stats.q]);
-
-    itemState.price = stats.p;
-    itemState.quantity = stats.q;
-    itemState.snapshot = thisSnapshot;
-
-    await ItemState.put(connectedRealmId, itemKey, itemState);
-}
-
-/**
- * Updates the global item state file for the given realm+item and the given stats.
- *
- * @param {number} connectedRealmId
- * @param {string} itemKey
- * @param {number} thisSnapshot
- * @param {object} stats
- */
-async function updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats) {
-    await GlobalItemState.lock(itemKey);
-    let globalItemState = await GlobalItemState.get(itemKey);
-    globalItemState.current = globalItemState.current || {};
-    globalItemState.current[connectedRealmId] = [thisSnapshot, stats.p, stats.q];
-    await GlobalItemState.put(itemKey, globalItemState);
-    GlobalItemState.unlock(itemKey);
 }
 
 main().catch(function (e) {
