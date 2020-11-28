@@ -66,6 +66,7 @@ module.exports = new function () {
         result.price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;
         result.quantity = buf.readUInt32LE(advance(4));
 
+        /* skip reading auctions, we don't need them
         result.auctions = [];
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             result.auctions.push([
@@ -73,9 +74,13 @@ module.exports = new function () {
                 buf.readUInt32LE(advance(4)),
             ]);
         }
+        */
+        let aucRecCount = buf.readUInt16LE(advance(2));
+        cursorPosition += aucRecCount * (4 + 4);
 
-        result.specifics = [];
+        // result.specifics = [];
         if (!noSpecifics) {
+            /* skip reading specifics, we don't need them
             for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
                 let specData = [
                     buf.readUInt32LE(advance(4)) * COPPER_SILVER,
@@ -86,6 +91,12 @@ module.exports = new function () {
                     specData[2].push(buf.readUInt16LE(advance(2)))
                 }
                 result.specifics.push(specData);
+            }
+            */
+            for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+                cursorPosition += 4 + 1;
+                let remainingBonuses = buf.readUInt8(advance(1));
+                cursorPosition += remainingBonuses * 2;
             }
         }
 
