@@ -546,26 +546,18 @@ async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
         }
         itemState.auctions.push([parseInt(price), stats.auc[price]]);
     }
-    itemState.auctions.sort(function (a, b) {
-        return a.p - b.p;
-    });
 
     itemState.specifics = [];
     (stats.specifics || []).forEach(spec => {
         itemState.specifics.push([spec.price, spec.lootedLevel, spec.bonuses]);
     });
-    itemState.specifics.sort((a, b) => (a[0] - b[0] || a[1] - b[1]));
 
     itemState.snapshots = itemState.snapshots || [];
-    for (let snapshot, x = 0; snapshot = itemState.snapshots[x]; x++) {
-        if (snapshot[0] < tooOld || snapshot[0] === thisSnapshot) {
-            itemState.snapshots.splice(x--, 1);
-        }
+    let snapshot;
+    while ((snapshot = itemState.snapshots[0]) && snapshot[0] < tooOld) {
+        itemState.snapshots.splice(0, 1);
     }
     itemState.snapshots.push([thisSnapshot, stats.p, stats.q]);
-    itemState.snapshots.sort(function (a, b) {
-        return a[0] - b[0];
-    });
 
     itemState.price = stats.p;
     itemState.quantity = stats.q;
