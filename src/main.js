@@ -260,7 +260,7 @@ function nextCheckTimestamp(realmState) {
     for (let x = Math.max(1, snapshots.length - SNAPSHOTS_FOR_INTERVAL); x < snapshots.length; x++) {
         minInterval = Math.min(minInterval, snapshots[x] - snapshots[x - 1]);
     }
-    const nextSnapshot = realmState.snapshot + minInterval;
+    const nextSnapshot = (realmState.snapshot || realmState.lastCheck) + minInterval;
 
     // Don't let us check more frequently than every 5 minutes.
     const fallback = realmState.lastCheck + 5 * MS_MINUTE;
@@ -389,7 +389,17 @@ async function processConnectedRealm(connectedRealmId) {
     if (response.status === 200) {
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
-        const items = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
+        let items;
+        try {
+            items = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
+        } catch (error) {
+            delete realmState.locked;
+            await RealmState.put(connectedRealmId, realmState);
+
+            setPendingTimer(connectedRealmId, realmState);
+
+            throw error;
+        }
 
         realmState.snapshot = thisSnapshot;
         realmState.summary = realmState.summary || {};
@@ -447,6 +457,9 @@ function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
             if (m.action === 'finish') {
                 logMsg("Received " + Object.keys(m.data).length + " items back from child", connectedRealmId);
                 resolve(m.data);
+            } else if (m.action === 'error') {
+                logMsg("Child reported some error", connectedRealmId);
+                reject();
             } else {
                 logMsg("Unknown message!", connectedRealmId);
                 console.log(m);

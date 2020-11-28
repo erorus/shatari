@@ -171,7 +171,7 @@ const realmProcess = new function () {
             alive.checkIn();
 
             running.push(wrapRunner(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
-            //running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
+            running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
         }
         await Promise.all(running);
 
@@ -231,7 +231,7 @@ const realmProcess = new function () {
         globalItemState.current = globalItemState.current || {};
         globalItemState.current[connectedRealmId] = [thisSnapshot, stats.p, stats.q];
         await GlobalItemState.put(itemKey, globalItemState);
-        GlobalItemState.unlock(itemKey);
+        await GlobalItemState.unlock(itemKey);
     }
 };
 
@@ -244,19 +244,33 @@ async function main () {
                 realmList = m.data.realmList;
                 itemList = m.data.itemList;
 
-                const result = await realmProcess.processConnectedRealmAuctions(
-                    m.data.connectedRealmId,
-                    m.data.thisSnapshot,
-                    m.data.data
-                );
+                let result;
+                try {
+                    result = await realmProcess.processConnectedRealmAuctions(
+                        m.data.connectedRealmId,
+                        m.data.thisSnapshot,
+                        m.data.data
+                    );
 
-                process.send({
-                    action: 'finish',
-                    data: result,
-                }, undefined, undefined, () => {
-                    alive.close();
-                    process.exit();
-                })
+                    process.send({
+                        action: 'finish',
+                        data: result,
+                    }, undefined, undefined, () => {
+                        alive.close();
+                        process.exit();
+                    });
+                } catch (err) {
+                    logMsg("Error while processing auctions", m.data.connectedRealmId);
+                    console.log(err);
+
+                    process.send({
+                        action: 'error'
+                    }, undefined, undefined, () => {
+                        alive.close();
+                        process.exit();
+                    });
+                }
+
                 break;
             default:
                 logMsg("received unknown message!");

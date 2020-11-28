@@ -1,4 +1,5 @@
-const Lock = require('./lock');
+const lockfile = require('proper-lockfile');
+
 const fs = require('fs').promises;
 const Path = require('path');
 const {gzip, ungzip} = require('node-gzip');
@@ -11,6 +12,8 @@ module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
     const VERSION = 1;
+
+    const heldLocks = {};
 
     // ------ //
     // PUBLIC //
@@ -33,6 +36,11 @@ module.exports = new function () {
             }
 
             throw error;
+        }
+
+        // The file may exist as 0 bytes, just so we can lock it...
+        if (compressed.length === 0) {
+            return {};
         }
 
         let buf;
@@ -82,7 +90,38 @@ module.exports = new function () {
      * @param {string} itemKey
      * @return {Promise}
      */
-    this.lock = (itemKey) => Lock.acquire(itemKey);
+    this.lock = async function (itemKey) {
+        const path = getPath(itemKey);
+
+        const lockOptions = {
+            stale: 30000,
+            retries: {
+                retries: 10,
+                factor: 2,
+                minTimeout: 100,
+                maxTimeout: 1000,
+                randomize: true,
+            }
+        };
+
+        try {
+            heldLocks[itemKey] = await lockfile.lock(path, lockOptions);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                const parent = Path.dirname(path);
+                await fs.mkdir(parent, {recursive: true});
+                await fs.appendFile(path, '');
+
+                try {
+                    heldLocks[itemKey] = await lockfile.lock(path, lockOptions);
+                } catch (error2) {
+                    throw error2;
+                }
+            } else {
+                throw error;
+            }
+        }
+    }
 
     /**
      * Writes to disk the given state for the item on all connected realms.
@@ -146,8 +185,18 @@ module.exports = new function () {
 
     /**
      * Remove an exclusive lock on the file.
+     *
+     * @return {Promise}
      */
-    this.unlock = (itemKey) => Lock.release(itemKey);
+    this.unlock = function (itemKey) {
+        const release = heldLocks[itemKey];
+        if (!release) {
+            throw "Could not find lock for " + itemKey;
+        }
+
+        delete heldLocks[itemKey];
+        return release();
+    }
 
     // ------- //
     // PRIVATE //
