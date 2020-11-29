@@ -5,7 +5,6 @@ const Aliveness = require('./aliveness');
 const ItemKey = require('./itemKey');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
-const GlobalItemState = require('./globalItemState');
 
 const CLASS_WEAPON = 2;
 const CLASS_ARMOR = 4;
@@ -184,7 +183,6 @@ const realmProcess = new function () {
             alive.checkIn();
 
             running.push(wrapRunner(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
-            running.push(wrapRunner(updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
         }
         await Promise.all(running);
 
@@ -228,23 +226,6 @@ const realmProcess = new function () {
         itemState.snapshot = thisSnapshot;
 
         await ItemState.put(connectedRealmId, itemKey, itemState);
-    }
-
-    /**
-     * Updates the global item state file for the given realm+item and the given stats.
-     *
-     * @param {number} connectedRealmId
-     * @param {string} itemKey
-     * @param {number} thisSnapshot
-     * @param {object} stats
-     */
-    async function updateGlobalItem(connectedRealmId, itemKey, thisSnapshot, stats) {
-        await GlobalItemState.lock(itemKey);
-        let globalItemState = await GlobalItemState.get(itemKey);
-        globalItemState.current = globalItemState.current || {};
-        globalItemState.current[connectedRealmId] = [thisSnapshot, stats.p, stats.q];
-        await GlobalItemState.put(itemKey, globalItemState);
-        await GlobalItemState.unlock(itemKey);
     }
 };
 

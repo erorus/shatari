@@ -6,8 +6,7 @@
   "dependencies": {
     "axios": "^0.21.0",
     "dateformat": "^3.0.3",
-    "node-gzip": "^1.1.2",
-    "proper-lockfile": "^4.1.1"
+    "node-gzip": "^1.1.2"
   },
   "devDependencies": {},
   "scripts": {
