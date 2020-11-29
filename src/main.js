@@ -448,7 +448,8 @@ async function processConnectedRealm(connectedRealmId) {
  * @return {object} All the item stats from the snapshot, keyed by item key.
  */
 function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
-    logMsg("Sending " + (data.auctions || []).length + " auctions to child", connectedRealmId);
+    logMsg("Sending " + (data.auctions || []).length + " auctions from " +
+        dateFormat(new Date(thisSnapshot), 'UTC:HH:MM:ss') + " to child", connectedRealmId);
 
     return new Promise((resolve, reject) => {
         const child = cp.fork(`${__dirname}/realmProcess.js`);

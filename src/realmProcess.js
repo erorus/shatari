@@ -162,11 +162,14 @@ const realmProcess = new function () {
         });
 
         alive.checkIn();
+
+        /*
         logMsg(
             "processing " + data.auctions.length + " auctions and saving " + Object.keys(stats).length +
             " items from " + dateFormat(new Date(thisSnapshot), 'UTC:HH:MM:ss') + '.',
             connectedRealmId
         );
+        */
 
         let running = [];
         for (let itemKey in stats) {
@@ -185,7 +188,7 @@ const realmProcess = new function () {
         }
         await Promise.all(running);
 
-        logMsg("returning " + Object.keys(stats).length + " results", connectedRealmId);
+        //logMsg("returning " + Object.keys(stats).length + " results", connectedRealmId);
 
         return stats;
     }
