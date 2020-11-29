@@ -121,7 +121,7 @@ module.exports = new function () {
         // 2 bytes for snapshot list length, then the snapshot list
         bufferSize += 2 + 4 * (state.snapshots || []).length;
         // 2 bytes for summary list length, then lists of id+level+suffix+snapshot+silvers+quantity
-        bufferSize += 2 + (4 + 2 + 2 + 4 + 4 + 4) * Object.keys(state.summary || {}).length;
+        bufferSize += 4 + (4 + 2 + 2 + 4 + 4 + 4) * Object.keys(state.summary || {}).length;
 
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
