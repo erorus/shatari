@@ -397,7 +397,7 @@ async function processConnectedRealm(connectedRealmId) {
  * @param {number} connectedRealmId
  * @param {number} thisSnapshot
  * @param {object} data  The parsed JSON response from the API
- * @return {object} All the item stats from the snapshot, keyed by item key.
+ * @return {Promise<object>} All the item stats from the snapshot, keyed by item key.
  */
 function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
     logMsg("Sending " + (data.auctions || []).length + " auctions from " +
