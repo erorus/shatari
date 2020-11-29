@@ -110,31 +110,41 @@ const realmProcess = new function () {
                 return;
             }
 
-            const itemKey = ItemKeySerialize.stringify(ItemKey.get(auction.item));
-
-            if (!stats[itemKey]) {
-                stats[itemKey] = {
-                    p: 0,
-                    q: 0,
-                };
-                if (CLASSES_EQUIPMENT.includes(itemData['class'])) {
-                    stats[itemKey].specifics = [];
-                } else {
-                    stats[itemKey].auc = {};
+            {
+                const itemKey = ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: 0});
+                if (!stats[itemKey]) {
+                    stats[itemKey] = {
+                        p: 0,
+                        q: 0,
+                        auc: {},
+                    };
                 }
-            }
 
-            const item = stats[itemKey];
+                const item = stats[itemKey];
+                if (!item.p || item.p > price) {
+                    item.p = price;
+                }
+                item.q += quantity;
 
-            if (!item.p || item.p > price) {
-                item.p = price;
-            }
-            item.q += quantity;
-
-            if (item.auc) {
                 item.auc[price] = (item.auc[price] || 0) + quantity;
             }
-            if (item.specifics) {
+
+            if (CLASSES_EQUIPMENT.includes(itemData['class'])) {
+                const itemKeyFull = ItemKeySerialize.stringify(ItemKey.get(auction.item));
+                if (!stats[itemKeyFull]) {
+                    stats[itemKeyFull] = {
+                        p: 0,
+                        q: 0,
+                        specifics: [],
+                    };
+                }
+
+                const item = stats[itemKeyFull];
+                if (!item.p || item.p > price) {
+                    item.p = price;
+                }
+                item.q += quantity;
+
                 const spec = [
                     price,
                     0,
