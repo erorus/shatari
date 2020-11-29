@@ -2,9 +2,10 @@ const fs = require('fs').promises;
 const Path = require('path');
 const {gzip, ungzip} = require('node-gzip');
 
+const Constants = require('./constants');
 const ItemKeySerialize = require('./itemKeySerialize');
 
-const DATA_DIR = Path.resolve(__dirname, '..', 'data');
+const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
     const COPPER_SILVER = 100;

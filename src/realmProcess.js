@@ -1,3 +1,5 @@
+const Path = require('path');
+const fs = require('fs').promises;
 const process = require('process');
 const dateFormat = require('dateformat');
 
@@ -11,6 +13,8 @@ const Runner = require('./runner');
 const CLASS_WEAPON = 2;
 const CLASS_ARMOR = 4;
 const CLASSES_EQUIPMENT = [CLASS_WEAPON, CLASS_ARMOR];
+
+const DATA_DIR = Constants.DATA_DIR;
 
 const MODIFIER_TYPE_LOOTED_LEVEL = 9;
 
@@ -37,6 +41,8 @@ function logMsg(message, realm) {
 }
 
 const realmProcess = new function () {
+    let tooOld;
+
     /**
      * Given auction data and a realm ID, update our files for that realm.
      *
@@ -46,7 +52,13 @@ const realmProcess = new function () {
      * @return {object} All the item stats from the snapshot, keyed by item key.
      */
     this.processConnectedRealmAuctions = async function (connectedRealmId, thisSnapshot, data) {
+        tooOld = thisSnapshot - Constants.MAX_HISTORY;
+
         const stats = {};
+
+        const priorAuctions = await getPriorAuctionList(connectedRealmId);
+        const currentAuctions = {};
+
         data.auctions.forEach(function (auction) {
             const itemId = auction.item.id;
             const itemData = itemList[itemId];
@@ -61,8 +73,12 @@ const realmProcess = new function () {
                 return;
             }
 
+            const auctionKey = [auction.id, quantity].join('-');
+            let auctionListItemKey;
+
             {
                 const itemKey = ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: 0});
+                auctionListItemKey = itemKey;
                 if (!stats[itemKey]) {
                     stats[itemKey] = {
                         p: 0,
@@ -82,6 +98,7 @@ const realmProcess = new function () {
 
             if (CLASSES_EQUIPMENT.includes(itemData['class'])) {
                 const itemKeyFull = ItemKeySerialize.stringify(ItemKey.get(auction.item));
+                auctionListItemKey = itemKeyFull;
                 if (!stats[itemKeyFull]) {
                     stats[itemKeyFull] = {
                         p: 0,
@@ -110,9 +127,38 @@ const realmProcess = new function () {
                 }
                 item.specifics.push(spec);
             }
+
+            currentAuctions[auctionKey] = auctionListItemKey;
         });
 
         aliveness.checkIn();
+
+        const itemKeysToUpdate = {};
+        const notInBoth = function (a, b) {
+            for (let auctionKey in a) {
+                if (a.hasOwnProperty(auctionKey) && !b.hasOwnProperty(auctionKey)) {
+                    let itemKeyString = a[auctionKey];
+                    itemKeysToUpdate[itemKeyString] = true;
+
+                    // Include transmog mode.
+                    let parsed = ItemKeySerialize.parse(itemKeyString);
+                    if (parsed.itemSuffix || parsed.itemLevel) {
+                        itemKeyString = ItemKeySerialize.stringify({
+                            itemId: parsed.itemId,
+                            itemSuffix: 0,
+                            itemLevel: 0,
+                        });
+                        itemKeysToUpdate[itemKeyString] = true;
+                    }
+                }
+            }
+        };
+        notInBoth(priorAuctions, currentAuctions);
+        notInBoth(currentAuctions, priorAuctions);
+
+        aliveness.checkIn();
+
+        logMsg("found " + Object.keys(itemKeysToUpdate).length + " items to update", connectedRealmId);
 
         /*
         logMsg(
@@ -123,8 +169,9 @@ const realmProcess = new function () {
         */
 
         let running = [];
-        for (let itemKey in stats) {
-            if (!stats.hasOwnProperty(itemKey)) {
+        running.push(Runner.wrap(putPriorAuctionList(connectedRealmId, currentAuctions)));
+        for (let itemKey in itemKeysToUpdate) {
+            if (!itemKeysToUpdate.hasOwnProperty(itemKey)) {
                 continue;
             }
 
@@ -134,13 +181,60 @@ const realmProcess = new function () {
 
             aliveness.checkIn();
 
-            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
+            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey] || {})));
         }
         await Promise.all(running);
 
         //logMsg("returning " + Object.keys(stats).length + " results", connectedRealmId);
 
         return stats;
+    }
+
+    /**
+     * @param {number} connectedRealmId
+     * @return {Promise<object>}
+     */
+    async function getPriorAuctionList(connectedRealmId) {
+        const path = Path.resolve(DATA_DIR, '' + connectedRealmId, 'auctionItems.json');
+
+        let data;
+        try {
+            data = await fs.readFile(path);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                return [];
+            }
+
+            throw error;
+        }
+
+        return JSON.parse(data);
+    }
+
+    /**
+     * @param {number} connectedRealmId
+     * @param {object} list
+     * @return {Promise<void>}
+     */
+    async function putPriorAuctionList(connectedRealmId, list) {
+        const path = Path.resolve(DATA_DIR, '' + connectedRealmId, 'auctionItems.json');
+
+        const json = JSON.stringify(list);
+
+        try {
+            await fs.writeFile(path, json);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                const parent = Path.dirname(path);
+
+                await fs.mkdir(parent, {recursive: true});
+                await fs.writeFile(path, json);
+
+                return;
+            }
+
+            throw error;
+        }
     }
 
     /**
@@ -152,11 +246,10 @@ const realmProcess = new function () {
      * @param {object} stats
      */
     async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
-        const tooOld = thisSnapshot - Constants.MAX_HISTORY;
-
         const itemState = await ItemState.get(connectedRealmId, itemKey);
 
         itemState.auctions = [];
+        stats.auc = stats.auc || {};
         for (let price in stats.auc) {
             if (!stats.auc.hasOwnProperty(price)) {
                 continue;
@@ -164,18 +257,26 @@ const realmProcess = new function () {
             itemState.auctions.push([parseInt(price), stats.auc[price]]);
         }
 
-        itemState.specifics = stats.specifics;
+        itemState.specifics = stats.specifics || [];
+
+        itemState.price = stats.p || itemState.price;
+        itemState.quantity = stats.q || 0;
+        itemState.snapshot = thisSnapshot;
 
         itemState.snapshots = itemState.snapshots || [];
-        let snapshot;
-        while ((snapshot = itemState.snapshots[0]) && snapshot[0] < tooOld) {
-            itemState.snapshots.splice(0, 1);
-        }
         itemState.snapshots.push([thisSnapshot, stats.p, stats.q]);
 
-        itemState.price = stats.p;
-        itemState.quantity = stats.q;
-        itemState.snapshot = thisSnapshot;
+        let foundFirstTooOld = false;
+        for (let index = itemState.snapshots.length - 1; index >= 0; index--) {
+            let snapshot = itemState.snapshots[index];
+            if (snapshot[0] < tooOld) {
+                if (!foundFirstTooOld) {
+                    foundFirstTooOld = true;
+                } else {
+                    itemState.snapshots.splice(index, 1);
+                }
+            }
+        }
 
         await ItemState.put(connectedRealmId, itemKey, itemState);
     }
