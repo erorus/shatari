@@ -10,21 +10,15 @@ const Runner = require('./runner');
 const RunOnce = require('./runOnce');
 const RealmState = require('./realmState');
 const GlobalState = require('./globalState');
+const Constants = require('./constants');
 
 const api = new BNet();
 
-const MS_SEC = 1000;
-const MS_MINUTE = 60 * MS_SEC;
-const MS_HOUR = 60 * MS_MINUTE;
-const MS_DAY = 24 * MS_HOUR;
-
-const MAX_HISTORY = 14 * MS_DAY;
-
 const CONCURRENT_REALM_LIMIT = 4;
 
-const MAX_ALIVENESS_DELAY = 10 * MS_MINUTE;
-const MAX_RUN_TIME = 6 * MS_HOUR;
-const MAX_SNAPSHOT_INTERVAL = 2 * MS_HOUR;
+const MAX_ALIVENESS_DELAY = 10 * Constants.MS_MINUTE;
+const MAX_RUN_TIME = 6 * Constants.MS_HOUR;
+const MAX_SNAPSHOT_INTERVAL = 2 * Constants.MS_HOUR;
 const SNAPSHOTS_FOR_INTERVAL = 20;
 
 let aliveness;
@@ -55,7 +49,7 @@ async function main() {
     const lastTimeout = setTimeout(() => {
         logMsg("Over time limit");
         process.exit();
-    }, MAX_RUN_TIME + 5 * MS_MINUTE);
+    }, MAX_RUN_TIME + 5 * Constants.MS_MINUTE);
     aliveness = new Aliveness(MAX_ALIVENESS_DELAY);
 
     const clearRealmTimers = () => {
@@ -114,7 +108,7 @@ async function main() {
     while (!abortLoop && Date.now() < endTime) {
         await checkPendingRealms();
         if (!abortLoop) {
-            await (new Promise(resolve => setTimeout(resolve, 3 * MS_SEC)));
+            await (new Promise(resolve => setTimeout(resolve, 3 * Constants.MS_SEC)));
         }
     }
 
@@ -221,21 +215,21 @@ function nextCheckTimestamp(realmState) {
     const nextSnapshot = (realmState.snapshot || realmState.lastCheck) + minInterval;
 
     // Don't let us check more frequently than every 5 minutes.
-    const fallback = realmState.lastCheck + 5 * MS_MINUTE;
+    const fallback = realmState.lastCheck + 5 * Constants.MS_MINUTE;
 
     if (nextSnapshot < now) {
         // We're overdue.
         return Math.max(fallback, now);
     }
 
-    const early = nextSnapshot - 2 * MS_MINUTE;
+    const early = nextSnapshot - 2 * Constants.MS_MINUTE;
     if (early > now) {
         // It's far in the future. Guess 2 minutes early, to look for a smaller interval.
         return Math.max(fallback, early);
     }
 
     // It's soon.
-    return nextSnapshot + 10 * MS_SEC;
+    return nextSnapshot + 10 * Constants.MS_SEC;
 }
 
 /**
@@ -319,8 +313,8 @@ async function processConnectedRealm(connectedRealmId) {
     const realmState = await RealmState.get(connectedRealmId);
     if (realmState.hasOwnProperty('locked')) {
         const now = Date.now();
-        logMsg("Locked since " + Math.round((now - realmState.locked) / MS_MINUTE) + " minutes ago.", connectedRealmId);
-        if (realmState.locked > (now - 2 * MS_HOUR)) {
+        logMsg("Locked since " + Math.round((now - realmState.locked) / Constants.MS_MINUTE) + " minutes ago.", connectedRealmId);
+        if (realmState.locked > (now - 2 * Constants.MS_HOUR)) {
             return;
         }
         logMsg("Ignoring lock.", connectedRealmId);
@@ -369,7 +363,7 @@ async function processConnectedRealm(connectedRealmId) {
             realmState.summary[itemKey] = [thisSnapshot, items[itemKey].p, items[itemKey].q];
         }
 
-        const tooOld = thisSnapshot - MAX_HISTORY;
+        const tooOld = thisSnapshot - Constants.MAX_HISTORY;
         realmState.snapshots = realmState.snapshots || [];
         for (let snapshot, x = 0; snapshot = realmState.snapshots[x]; x++) {
             if (snapshot < tooOld || snapshot === thisSnapshot) {
@@ -394,7 +388,7 @@ async function processConnectedRealm(connectedRealmId) {
 
     setPendingTimer(connectedRealmId, realmState);
 
-    logMsg("Finished after " + ((Date.now() - startTime) / MS_SEC) + " seconds", connectedRealmId);
+    logMsg("Finished after " + ((Date.now() - startTime) / Constants.MS_SEC) + " seconds", connectedRealmId);
 }
 
 /**

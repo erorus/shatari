@@ -2,6 +2,7 @@ const process = require('process');
 const dateFormat = require('dateformat');
 
 const Aliveness = require('./aliveness');
+const Constants = require('./constants');
 const ItemKey = require('./itemKey');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
@@ -13,16 +14,9 @@ const CLASSES_EQUIPMENT = [CLASS_WEAPON, CLASS_ARMOR];
 
 const MODIFIER_TYPE_LOOTED_LEVEL = 9;
 
-const MS_SEC = 1000;
-const MS_MINUTE = 60 * MS_SEC;
-const MS_HOUR = 60 * MS_MINUTE;
-const MS_DAY = 24 * MS_HOUR;
-
-const MAX_HISTORY = 14 * MS_DAY;
-
 const CONCURRENT_ITEM_LIMIT = 8;
 
-let alive;
+let aliveness;
 let realmList = {};
 let itemList = {};
 
@@ -118,7 +112,7 @@ const realmProcess = new function () {
             }
         });
 
-        alive.checkIn();
+        aliveness.checkIn();
 
         /*
         logMsg(
@@ -138,7 +132,7 @@ const realmProcess = new function () {
                 await Runner.waitForOne(running);
             }
 
-            alive.checkIn();
+            aliveness.checkIn();
 
             running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
         }
@@ -158,7 +152,7 @@ const realmProcess = new function () {
      * @param {object} stats
      */
     async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
-        const tooOld = thisSnapshot - MAX_HISTORY;
+        const tooOld = thisSnapshot - Constants.MAX_HISTORY;
 
         const itemState = await ItemState.get(connectedRealmId, itemKey);
 
@@ -188,7 +182,7 @@ const realmProcess = new function () {
 };
 
 async function main () {
-    alive = new Aliveness(60 * 1000);
+    aliveness = new Aliveness(60 * 1000);
 
     process.on('message', async (m) => {
         switch (m.action) {
@@ -208,7 +202,7 @@ async function main () {
                         action: 'finish',
                         data: result,
                     }, undefined, undefined, () => {
-                        alive.close();
+                        aliveness.close();
                         process.exit();
                     });
                 } catch (err) {
@@ -218,7 +212,7 @@ async function main () {
                     process.send({
                         action: 'error'
                     }, undefined, undefined, () => {
-                        alive.close();
+                        aliveness.close();
                         process.exit();
                     });
                 }
