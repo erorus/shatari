@@ -9,7 +9,7 @@ const DATA_DIR = Path.resolve(__dirname, '..', 'data');
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
-    const VERSION = 2;
+    const VERSION = 3;
 
     // ------ //
     // PUBLIC //
@@ -54,10 +54,20 @@ module.exports = new function () {
 
         const version = buf.readUInt8(advance(1));
         let simpleItemKey = false;
-        if (version === 1) {
-            simpleItemKey = true;
-        } else if (version !== VERSION) {
-            throw "Unsupported version: " + version;
+        let shortSummaryCount = false;
+
+        switch (version) {
+            case 1:
+                simpleItemKey = true;
+                // no break
+            case 2:
+                shortSummaryCount = true;
+                break;
+            case VERSION:
+                // no op
+                break;
+            default:
+                throw "Unsupported version: " + version;
         }
 
         const result = {};
@@ -68,7 +78,8 @@ module.exports = new function () {
             result.snapshots.push(buf.readUInt32LE(advance(4)) * MS_SEC);
         }
         result.summary = {};
-        for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+        let remaining = shortSummaryCount ? buf.readUInt16LE(advance(2)) : buf.readUInt32LE(advance(4));
+        for (; remaining > 0; remaining--) {
             let itemKey = {
                 itemId: buf.readUInt32LE(advance(4)),
                 itemLevel: 0,
@@ -136,7 +147,7 @@ module.exports = new function () {
 
         // Summary list
         let summary = state.summary || {};
-        buf.writeUInt16LE(Object.keys(summary).length, advance(2));
+        buf.writeUInt32LE(Object.keys(summary).length, advance(4));
         for (let itemKeyString in summary) {
             if (!summary.hasOwnProperty(itemKeyString)) {
                 continue;
