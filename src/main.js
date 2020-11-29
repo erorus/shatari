@@ -6,6 +6,7 @@ const Path = require('path');
 const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
+const Runner = require('./runner');
 const RunOnce = require('./runOnce');
 const RealmState = require('./realmState');
 const GlobalState = require('./globalState');
@@ -140,49 +141,6 @@ function logMsg(message, realm) {
     console.log(date + ' ' + message);
 }
 
-/**
- * Given an array of promises, wait for one to finish, then remove it from the array.
- *
- * @param {Promise[]} running
- */
-async function waitForRunner(running) {
-    let toThrow;
-    let foundResolved = false;
-
-    try {
-        await Promise.race(running);
-    } catch (e) {
-        toThrow = e;
-    }
-
-    for (let p, x = 0; p = running[x]; x++) {
-        if (p.resolved) {
-            running.splice(x, 1);
-
-            foundResolved = true;
-            break;
-        }
-    }
-
-    if (toThrow) {
-        throw toThrow;
-    } else if (!foundResolved) {
-        throw "Could not find any resolved in running array!";
-    }
-}
-
-/**
- * Wraps a promise later used by waitForRunner()
- *
- * @param {Promise} runner
- * @return {Promise}
- */
-function wrapRunner(runner) {
-    let finallyPromise = runner.finally(() => finallyPromise.resolved = true);
-
-    return finallyPromise;
-}
-
 //             //
 // Realm Queue //
 //             //
@@ -199,7 +157,7 @@ async function checkPendingRealms() {
             }
 
             let realmId = realmQueue.pending.shift();
-            realmQueue.running.push(wrapRunner(processConnectedRealm(realmId)));
+            realmQueue.running.push(Runner.wrap(processConnectedRealm(realmId)));
         }
     };
 
@@ -213,7 +171,7 @@ async function checkPendingRealms() {
         logQueueStatus();
 
         try {
-            await waitForRunner(realmQueue.running);
+            await Runner.waitForOne(realmQueue.running);
         } catch (e) {
             logMsg("Error while processing some realm...");
             console.log(e);

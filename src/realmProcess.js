@@ -5,6 +5,7 @@ const Aliveness = require('./aliveness');
 const ItemKey = require('./itemKey');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
+const Runner = require('./runner');
 
 const CLASS_WEAPON = 2;
 const CLASS_ARMOR = 4;
@@ -39,49 +40,6 @@ function logMsg(message, realm) {
     }
 
     console.log(date + ' ' + message);
-}
-
-/**
- * Given an array of promises, wait for one to finish, then remove it from the array.
- *
- * @param {Promise[]} running
- */
-async function waitForRunner(running) {
-    let toThrow;
-    let foundResolved = false;
-
-    try {
-        await Promise.race(running);
-    } catch (e) {
-        toThrow = e;
-    }
-
-    for (let p, x = 0; p = running[x]; x++) {
-        if (p.resolved) {
-            running.splice(x, 1);
-
-            foundResolved = true;
-            break;
-        }
-    }
-
-    if (toThrow) {
-        throw toThrow;
-    } else if (!foundResolved) {
-        throw "Could not find any resolved in running array!";
-    }
-}
-
-/**
- * Wraps a promise later used by waitForRunner()
- *
- * @param {Promise} runner
- * @return {Promise}
- */
-function wrapRunner(runner) {
-    let finallyPromise = runner.finally(() => finallyPromise.resolved = true);
-
-    return finallyPromise;
 }
 
 const realmProcess = new function () {
@@ -177,12 +135,12 @@ const realmProcess = new function () {
             }
 
             while (running.length >= CONCURRENT_ITEM_LIMIT) {
-                await waitForRunner(running);
+                await Runner.waitForOne(running);
             }
 
             alive.checkIn();
 
-            running.push(wrapRunner(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
+            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
         }
         await Promise.all(running);
 
