@@ -10,7 +10,7 @@ const DATA_DIR = Constants.DATA_DIR;
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
-    const VERSION = 2;
+    const VERSION = 3;
 
     // ------ //
     // PUBLIC //
@@ -56,10 +56,17 @@ module.exports = new function () {
 
         const version = buf.readUInt8(advance(1));
         let noSpecifics = false;
-        if (version === 1) {
-            noSpecifics = true;
-        } else if (version !== VERSION) {
-            throw "Unsupported version: " + version;
+        switch (version) {
+            case 1:
+                noSpecifics = true;
+                break;
+            case 2:
+                // No difference to us.
+            case VERSION:
+                // No op.
+                break;
+            default:
+                throw "Unsupported version: " + version;
         }
 
         const result = {};
