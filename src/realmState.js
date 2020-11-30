@@ -63,7 +63,7 @@ module.exports = new function () {
                 // no break
             case 2:
                 shortSummaryCount = true;
-                break;
+                // no break
             case VERSION:
                 // no op
                 break;

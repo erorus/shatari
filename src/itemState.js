@@ -59,9 +59,10 @@ module.exports = new function () {
         switch (version) {
             case 1:
                 noSpecifics = true;
-                break;
+                // no break
             case 2:
                 // No difference to us.
+                // no break
             case VERSION:
                 // No op.
                 break;
