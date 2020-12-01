@@ -54,16 +54,7 @@ module.exports = new function () {
         };
 
         const version = buf.readUInt8(advance(1));
-        let simpleItemKey = false;
-        let shortSummaryCount = false;
-
         switch (version) {
-            case 1:
-                simpleItemKey = true;
-                // no break
-            case 2:
-                shortSummaryCount = true;
-                // no break
             case VERSION:
                 // no op
                 break;
@@ -79,17 +70,14 @@ module.exports = new function () {
             result.snapshots.push(buf.readUInt32LE(advance(4)) * MS_SEC);
         }
         result.summary = {};
-        let remaining = shortSummaryCount ? buf.readUInt16LE(advance(2)) : buf.readUInt32LE(advance(4));
-        for (; remaining > 0; remaining--) {
+        for (let remaining = buf.readUInt32LE(advance(4)); remaining > 0; remaining--) {
             let itemKey = {
                 itemId: buf.readUInt32LE(advance(4)),
                 itemLevel: 0,
                 itemSuffix: 0,
             };
-            if (!simpleItemKey) {
-                itemKey.itemLevel = buf.readUInt16LE(advance(2));
-                itemKey.itemSuffix = buf.readUInt16LE(advance(2));
-            }
+            itemKey.itemLevel = buf.readUInt16LE(advance(2));
+            itemKey.itemSuffix = buf.readUInt16LE(advance(2));
             let itemKeyString = ItemKeySerialize.stringify(itemKey);
             let snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
             let price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;

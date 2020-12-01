@@ -55,14 +55,7 @@ module.exports = new function () {
         };
 
         const version = buf.readUInt8(advance(1));
-        let noSpecifics = false;
         switch (version) {
-            case 1:
-                noSpecifics = true;
-                // no break
-            case 2:
-                // No difference to us.
-                // no break
             case VERSION:
                 // No op.
                 break;
@@ -87,26 +80,24 @@ module.exports = new function () {
         let aucRecCount = buf.readUInt16LE(advance(2));
         cursorPosition += aucRecCount * (4 + 4);
 
-        // result.specifics = [];
-        if (!noSpecifics) {
-            /* skip reading specifics, we don't need them
-            for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
-                let specData = [
-                    buf.readUInt32LE(advance(4)) * COPPER_SILVER,
-                    buf.readUInt8(advance(1)),
-                    []
-                ];
-                for (let remainingBonuses = buf.readUInt8(advance(1)); remainingBonuses > 0; remainingBonuses--) {
-                    specData[2].push(buf.readUInt16LE(advance(2)))
-                }
-                result.specifics.push(specData);
+        /* skip reading specifics, we don't need them
+        result.specifics = [];
+        for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+            let specData = [
+                buf.readUInt32LE(advance(4)) * COPPER_SILVER,
+                buf.readUInt8(advance(1)),
+                []
+            ];
+            for (let remainingBonuses = buf.readUInt8(advance(1)); remainingBonuses > 0; remainingBonuses--) {
+                specData[2].push(buf.readUInt16LE(advance(2)))
             }
-            */
-            for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
-                cursorPosition += 4 + 1;
-                let remainingBonuses = buf.readUInt8(advance(1));
-                cursorPosition += remainingBonuses * 2;
-            }
+            result.specifics.push(specData);
+        }
+        */
+        for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+            cursorPosition += 4 + 1;
+            let remainingBonuses = buf.readUInt8(advance(1));
+            cursorPosition += remainingBonuses * 2;
         }
 
         result.snapshots = [];
