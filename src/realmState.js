@@ -73,11 +73,9 @@ module.exports = new function () {
         for (let remaining = buf.readUInt32LE(advance(4)); remaining > 0; remaining--) {
             let itemKey = {
                 itemId: buf.readUInt32LE(advance(4)),
-                itemLevel: 0,
-                itemSuffix: 0,
+                itemLevel: buf.readUInt16LE(advance(2)),
+                itemSuffix: buf.readUInt16LE(advance(2)),
             };
-            itemKey.itemLevel = buf.readUInt16LE(advance(2));
-            itemKey.itemSuffix = buf.readUInt16LE(advance(2));
             let itemKeyString = ItemKeySerialize.stringify(itemKey);
             let snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
             let price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;
