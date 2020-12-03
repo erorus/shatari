@@ -264,7 +264,7 @@ const realmProcess = new function () {
         itemState.snapshot = thisSnapshot;
 
         itemState.snapshots = itemState.snapshots || [];
-        itemState.snapshots.push([thisSnapshot, stats.p, stats.q]);
+        itemState.snapshots.push([itemState.snapshot, itemState.price, itemState.quantity]);
 
         let foundFirstTooOld = false;
         for (let index = itemState.snapshots.length - 1; index >= 0; index--) {
