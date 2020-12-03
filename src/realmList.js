@@ -7,7 +7,7 @@ const BNet = require('./battlenet');
 const RunOnce = require('./runOnce');
 
 const api = new BNet();
-const regions = [api.REGION_US];
+const regions = [api.REGION_US, api.REGION_EU];
 
 async function main() {
     // Run this only once.

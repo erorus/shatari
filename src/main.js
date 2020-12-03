@@ -270,7 +270,7 @@ function setPendingTimer(connectedRealmId, realmState) {
  * @return {object}
  */
 async function fetchRealmList() {
-    const regions = [api.REGION_US];
+    const regions = [api.REGION_US, api.REGION_EU];
     const result = {};
 
     for (let region, x = 0; region = regions[x]; x++) {
