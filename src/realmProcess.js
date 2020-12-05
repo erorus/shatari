@@ -16,8 +16,6 @@ const CLASSES_EQUIPMENT = [CLASS_WEAPON, CLASS_ARMOR];
 
 const DATA_DIR = Constants.DATA_DIR;
 
-const MODIFIER_TYPE_LOOTED_LEVEL = 9;
-
 const CONCURRENT_ITEM_LIMIT = 8;
 
 let aliveness;
@@ -115,16 +113,12 @@ const realmProcess = new function () {
 
                 const spec = [
                     price,
-                    0,
+                    [],
                     auction.item.bonus_lists || [],
                 ];
-                if (auction.item.modifiers) {
-                    auction.item.modifiers.forEach(modifier => {
-                        if (modifier.type === MODIFIER_TYPE_LOOTED_LEVEL) {
-                            spec[1] = modifier.value;
-                        }
-                    });
-                }
+                (auction.item.modifiers || []).forEach(modifier => {
+                    spec[1].push([modifier.type, modifier.value]);
+                });
                 item.specifics.push(spec);
             }
 

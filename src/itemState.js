@@ -10,7 +10,7 @@ const DATA_DIR = Constants.DATA_DIR;
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
-    const VERSION = 3;
+    const VERSION = 4;
 
     // ------ //
     // PUBLIC //
@@ -55,7 +55,11 @@ module.exports = new function () {
         };
 
         const version = buf.readUInt8(advance(1));
+        let fullModifiers = true;
         switch (version) {
+            case 3:
+                fullModifiers = false;
+                // no break
             case VERSION:
                 // No op.
                 break;
@@ -95,9 +99,15 @@ module.exports = new function () {
         }
         */
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
-            cursorPosition += 4 + 1;
-            let remainingBonuses = buf.readUInt8(advance(1));
-            cursorPosition += remainingBonuses * 2;
+            cursorPosition += 4;
+            if (fullModifiers) {
+                let modifierCount = buf.readUint8(advance(1));
+                cursorPosition += modifierCount * 6;
+            } else {
+                cursorPosition += 1;
+            }
+            let bonusCount = buf.readUInt8(advance(1));
+            cursorPosition += bonusCount * 2;
         }
 
         result.snapshots = [];
@@ -138,8 +148,12 @@ module.exports = new function () {
         // 2 bytes for specifics list length
         bufferSize += 2;
         (state.specifics || []).forEach(spec => {
-            // 4 bytes for price, 1 byte for looted level, 1 byte for bonus list length, then 2 bytes per bonus
-            bufferSize += 4 + 1 + 1 + 2 * spec[2].length;
+            // 4 bytes for price,
+            bufferSize += 4;
+            // 1 byte for modifier list length, 6 bytes per modifier
+            bufferSize += 1 + 6 * spec[1].length;
+            // 1 byte for bonus list length, then 2 bytes per bonus
+            bufferSize += 1 + 2 * spec[2].length;
         });
 
         const buf = Buffer.allocUnsafe(bufferSize);
@@ -170,7 +184,11 @@ module.exports = new function () {
         buf.writeUInt16LE((state.specifics || []).length, advance(2));
         (state.specifics || []).forEach(spec => {
             buf.writeUInt32LE(spec[0] / COPPER_SILVER, advance(4));
-            buf.writeUInt8(spec[1], advance(1));
+            buf.writeUInt8(spec[1].length, advance(1));
+            spec[1].forEach(modifier => {
+                buf.writeUInt16LE(modifier[0], advance(2));
+                buf.writeUInt32LE(modifier[1], advance(4));
+            });
             buf.writeUInt8(spec[2].length, advance(1));
             spec[2].forEach(bonus => {
                 buf.writeUInt16LE(bonus, advance(2));
