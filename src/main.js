@@ -379,6 +379,8 @@ async function processConnectedRealm(connectedRealmId) {
         const globalState = await GlobalState.get();
         globalState.snapshots = globalState.snapshots || {};
         globalState.snapshots[connectedRealmId] = thisSnapshot;
+        globalState.snapshotLists = globalState.snapshotLists || {};
+        globalState.snapshotLists[connectedRealmId] = realmState.snapshots;
         await GlobalState.put(globalState);
         GlobalState.unlock();
     }

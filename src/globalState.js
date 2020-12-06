@@ -9,7 +9,7 @@ const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
     const MS_SEC = 1000;
-    const VERSION = 1;
+    const VERSION = 2;
 
     // ------ //
     // PUBLIC //
@@ -52,15 +52,34 @@ module.exports = new function () {
         };
 
         const version = buf.readUInt8(advance(1));
-        if (version !== VERSION) {
-            throw "Unsupported version: " + version;
+        let withSnapshotLists = true;
+        switch (version) {
+            case 1:
+                withSnapshotLists = false;
+                // no break
+            case VERSION:
+                // no op
+                break;
+            default:
+                throw "Unsupported version: " + version;
         }
 
-        const result = {};
-        result.snapshots = {};
+        const result = {
+            snapshots: {},
+            snapshotLists: {},
+        };
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             let realmId = buf.readUInt16LE(advance(2));
             result.snapshots[realmId] = buf.readUInt32LE(advance(4)) * MS_SEC;
+        }
+        if (withSnapshotLists) {
+            for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+                let realmId = buf.readUInt16LE(advance(2));
+                result.snapshotLists[realmId] = [];
+                for (let realmRemaining = buf.readUInt16LE(advance(2)); realmRemaining > 0; realmRemaining--) {
+                    result.snapshotLists[realmId].push(buf.readUInt32LE(advance(4)) * MS_SEC);
+                }
+            }
         }
 
         if (cursorPosition !== buf.length) {
@@ -89,6 +108,15 @@ module.exports = new function () {
         let bufferSize = 1;
         // 2 bytes for snapshot list length, then the snapshot list keyed by realm id
         bufferSize += 2 + (2 + 4) * Object.keys(state.snapshots || {}).length;
+        // 2 bytes for the snapshotLists list length, and 2 bytes for each realm id in there, plus 2 per sublist length
+        state.snapshotLists = state.snapshotLists || {};
+        bufferSize += 2 + (2 + 2) * Object.keys(state.snapshotLists).length;
+        // 4 bytes for each timestamp in each snapshot list.
+        for (let realmId in state.snapshotLists) {
+            if (state.snapshotLists.hasOwnProperty(realmId)) {
+                bufferSize += 4 * state.snapshotLists[realmId].length;
+            }
+        }
 
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
@@ -110,6 +138,20 @@ module.exports = new function () {
                 buf.writeUInt16LE(parseInt(realmId), advance(2));
                 buf.writeUInt32LE(snapshots[realmId] / MS_SEC, advance(4));
             }
+        }
+
+        const snapshotLists = state.snapshotLists;
+        buf.writeUInt16LE(Object.keys(snapshotLists).length, advance(2));
+        for (let realmId in snapshotLists) {
+            if (!snapshotLists.hasOwnProperty(realmId)) {
+                continue;
+            }
+            let snapshotList = snapshotLists[realmId];
+            buf.writeUInt16LE(parseInt(realmId), advance(2));
+            buf.writeUInt16LE(snapshotList.length, advance(2));
+            snapshotList.forEach(timestamp => {
+                buf.writeUInt32LE(timestamp / MS_SEC, advance(4));
+            });
         }
 
         if (cursorPosition !== bufferSize) {
