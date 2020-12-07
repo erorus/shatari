@@ -10,10 +10,6 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
 const Runner = require('./runner');
 
-const CLASS_WEAPON = 2;
-const CLASS_ARMOR = 4;
-const CLASSES_EQUIPMENT = [CLASS_WEAPON, CLASS_ARMOR];
-
 const DATA_DIR = Constants.DATA_DIR;
 
 const CONCURRENT_ITEM_LIMIT = 8;
@@ -57,6 +53,13 @@ const realmProcess = new function () {
         const priorAuctions = await getPriorAuctionList(connectedRealmId);
         const currentAuctions = {};
 
+        const petKeysToModifiers = {
+            pet_quality_id: Constants.MODIFIER_BATTLE_PET_QUALITY,
+            pet_breed_id: Constants.MODIFIER_BATTLE_PET_BREED,
+            pet_level: Constants.MODIFIER_BATTLE_PET_LEVEL,
+            pet_species_id: Constants.MODIFIER_BATTLE_PET_SPECIES,
+        };
+
         data.auctions.forEach(function (auction) {
             const itemId = auction.item.id;
             const itemData = itemList[itemId];
@@ -74,8 +77,11 @@ const realmProcess = new function () {
             const auctionKey = [auction.id, quantity].join('-');
             let auctionListItemKey;
 
+            // Simple (transmog mode) stats, in the auc array.
             {
-                const itemKey = ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: 0});
+                const itemKey = itemData['class'] === Constants.CLASS_BATTLE_PET ?
+                    ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: auction.item.pet_species_id || 0}) :
+                    ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: 0});
                 auctionListItemKey = itemKey;
                 if (!stats[itemKey]) {
                     stats[itemKey] = {
@@ -94,7 +100,8 @@ const realmProcess = new function () {
                 item.auc[price] = (item.auc[price] || 0) + quantity;
             }
 
-            if (CLASSES_EQUIPMENT.includes(itemData['class'])) {
+            // Specifics for equipment and battle pets.
+            if (Constants.CLASSES_WITH_SPECIFICS.includes(itemData['class'])) {
                 const itemKeyFull = ItemKeySerialize.stringify(ItemKey.get(auction.item));
                 auctionListItemKey = itemKeyFull;
                 if (!stats[itemKeyFull]) {
@@ -116,9 +123,23 @@ const realmProcess = new function () {
                     [],
                     auction.item.bonus_lists || [],
                 ];
+                const foundModifiers = {};
                 (auction.item.modifiers || []).forEach(modifier => {
+                    foundModifiers[modifier.type] = true;
                     spec[1].push([modifier.type, modifier.value]);
                 });
+                if (itemData['class'] === Constants.CLASS_BATTLE_PET) {
+                    // Blizzard pulls out some pet attributes from the modifiers, but we push them back in.
+                    for (let petKeyName in petKeysToModifiers) {
+                        if (
+                            petKeysToModifiers.hasOwnProperty(petKeyName) &&
+                            !foundModifiers[petKeysToModifiers[petKeyName]] &&
+                            auction.item.hasOwnProperty(petKeyName)
+                        ) {
+                            spec[1].push([petKeysToModifiers[petKeyName], auction.item[petKeyName]]);
+                        }
+                    }
+                }
                 item.specifics.push(spec);
             }
 
@@ -139,8 +160,8 @@ const realmProcess = new function () {
                     if (parsed.itemSuffix || parsed.itemLevel) {
                         itemKeyString = ItemKeySerialize.stringify({
                             itemId: parsed.itemId,
+                            itemLevel: itemList[parsed.itemId]['class'] === Constants.CLASS_BATTLE_PET ? parsed.itemLevel : 0,
                             itemSuffix: 0,
-                            itemLevel: 0,
                         });
                         itemKeysToUpdate[itemKeyString] = true;
                     }

@@ -237,7 +237,12 @@ module.exports = new function () {
      * @return {string}
      */
     function getPath(connectedRealmId, itemKey) {
-        const itemId = ItemKeySerialize.parse(itemKey).itemId;
+        const parsed = ItemKeySerialize.parse(itemKey);
+        const itemId = parsed.itemId;
+
+        if (itemId === Constants.ITEM_PET_CAGE) {
+            return Path.resolve(DATA_DIR, '' + connectedRealmId, 'pet', '' + (parsed.itemLevel & 0xFF), '' + itemKey + '.bin');
+        }
 
         return Path.resolve(DATA_DIR, '' + connectedRealmId, '' + (itemId & 0xFF), '' + itemKey + '.bin');
     }

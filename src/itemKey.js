@@ -1,12 +1,9 @@
 const fs = require('fs');
 const Path = require('path');
+const Constants = require('./constants');
 
 const BONUSES_PATH = Path.resolve(__dirname, '..', 'bonuses.json');
 const ITEMS_PATH = Path.resolve(__dirname, '..', 'items.json');
-
-const CLASS_ARMOR = 4;
-const CLASS_WEAPON = 2;
-const EQUIPMENT_CLASSES = [CLASS_ARMOR, CLASS_WEAPON];
 
 module.exports = new function () {
     const bonusData = JSON.parse(fs.readFileSync(BONUSES_PATH));
@@ -46,9 +43,12 @@ module.exports = new function () {
             itemSuffix: 0,
         };
 
-        const item = itemData[auctionItem.id];
-
-        if (!item || !EQUIPMENT_CLASSES.includes(item['class'])) {
+        const item = itemData[auctionItem.id] || {};
+        if (item['class'] === Constants.CLASS_BATTLE_PET) {
+            result.itemLevel = auctionItem.pet_species_id || 0;
+            result.itemSuffix = (((auctionItem.pet_breed_id || 3) - 3) % 10) + 3;
+        }
+        if (!Constants.CLASSES_EQUIPMENT.includes(item['class'])) {
             return result;
         }
 
@@ -79,7 +79,7 @@ module.exports = new function () {
         if (curve) {
             let playerLevel = 60;
             auctionItem.modifiers.forEach(function (modifier) {
-                if (modifier.type === 9) {
+                if (modifier.type === Constants.MODIFIER_TIMEWALKER_LEVEL) {
                     playerLevel = modifier.value;
                 }
             });
