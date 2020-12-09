@@ -341,9 +341,7 @@ async function processConnectedRealm(connectedRealmId) {
 
     if (response.status === 200) {
         downloadTime = Date.now() - realmState.lastCheck;
-        let bytesRead = response.request.socket.bytesRead;
-        logMsg("Downloaded " + bytesRead.toLocaleString() + " bytes in " + (downloadTime / Constants.MS_SEC) + " seconds (" +
-            Math.round(bytesRead / 1024 / (downloadTime / Constants.MS_SEC)) + 'KBps)', connectedRealmId);
+        logMsg("Downloaded auctions in " + (downloadTime / Constants.MS_SEC) + " seconds", connectedRealmId);
 
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
@@ -397,8 +395,10 @@ async function processConnectedRealm(connectedRealmId) {
     setPendingTimer(connectedRealmId, realmState);
 
     let totalElapsed = (Date.now() - startTime);
-    logMsg("Finished after " + (totalElapsed / Constants.MS_SEC) + " seconds (" +
-        ((totalElapsed - downloadTime) / Constants.MS_SEC) + " seconds without download)", connectedRealmId);
+    logMsg("Finished after " + (totalElapsed / Constants.MS_SEC) + " seconds" +
+        (downloadTime ? ' (' + ((totalElapsed - downloadTime) / Constants.MS_SEC) + " seconds without download)" : ''),
+        connectedRealmId
+    );
 }
 
 /**
