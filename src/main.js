@@ -9,10 +9,12 @@ const dateFormat = require('dateformat');
 const Runner = require('./runner');
 const RunOnce = require('./runOnce');
 const RealmState = require('./realmState');
+const TokenState = require('./tokenState');
 const GlobalState = require('./globalState');
 const Constants = require('./constants');
 
 const api = new BNet();
+const regions = [api.REGION_US, api.REGION_EU];
 
 const CONCURRENT_REALM_LIMIT = 4;
 
@@ -20,6 +22,7 @@ const MAX_ALIVENESS_DELAY = 10 * Constants.MS_MINUTE;
 const MAX_RUN_TIME = 6 * Constants.MS_HOUR;
 const MAX_SNAPSHOT_INTERVAL = 2 * Constants.MS_HOUR;
 const SNAPSHOTS_FOR_INTERVAL = 20;
+const TOKEN_INTERVAL = 20 * Constants.MS_MINUTE + 10 * Constants.MS_SEC;
 
 let aliveness;
 let realmList = {};
@@ -97,9 +100,13 @@ async function main() {
     const initRealmCheck = async function (realmId) {
         setPendingTimer(realmId, await RealmState.get(realmId));
     };
+    const initTokenCheck = async function (region) {
+        setPendingTokenTimer(region, await TokenState.get(region));
+    };
     logMsg("Initializing realm timers.");
     let initPromises = [];
     realmIds.forEach(realmId => initPromises.push(initRealmCheck(realmId)));
+    regions.forEach(region => initPromises.push(initTokenCheck(region)));
     await Promise.all(initPromises);
     initPromises = undefined;
     logQueueStatus();
@@ -133,6 +140,91 @@ function logMsg(message, realm) {
     }
 
     console.log(date + ' ' + message);
+}
+
+//            //
+// WoW Tokens //
+//            //
+
+/**
+ * Check for updates for the given region's WoW Token price.
+ *
+ * @param {string} region
+ * @return {Promise<void>}
+ */
+async function checkToken(region) {
+    logMsg(region + " token: Checking price.");
+    const tokenState = await TokenState.get(region);
+    let response;
+    try {
+        response = await api.fetch(region, '/data/wow/token/index');
+    } catch (e) {
+        response = {status: 500};
+        logMsg("Error during token data fetch");
+        console.log(e);
+    }
+
+    if (response.status === 200) {
+        const now = Date.now();
+        const thisSnapshot = response.data.last_updated_timestamp;
+        const price = response.data.price;
+
+        if (thisSnapshot > (tokenState.snapshot || 0)) {
+            logMsg(region + " token: Found new snapshot from " + ((now - thisSnapshot) / Constants.MS_SEC) +
+                " seconds ago: " + (price / 10000).toLocaleString() + "g.");
+            tokenState.snapshot = thisSnapshot;
+            tokenState.price = price;
+
+            const tooOld = thisSnapshot - Constants.MAX_HISTORY;
+            tokenState.snapshots = tokenState.snapshots || [];
+            for (let snapshot, x = 0; snapshot = tokenState.snapshots[x]; x++) {
+                if (snapshot < tooOld || snapshot === thisSnapshot) {
+                    tokenState.snapshots.splice(x--, 1);
+                }
+            }
+            tokenState.snapshots.push([tokenState.snapshot, tokenState.price]);
+            tokenState.snapshots.sort(function (a, b) {
+                return a - b;
+            });
+
+            await TokenState.put(region, tokenState);
+        } else {
+            logMsg(region + " token: Found old/current snapshot from " + ((now - thisSnapshot) / Constants.MS_SEC) + " seconds ago.");
+        }
+    }
+
+    setPendingTokenTimer(region, tokenState);
+}
+
+/**
+ * Set a timer to check the region's token price.
+ *
+ * @param {string} region
+ * @param {Object} tokenState
+ */
+function setPendingTokenTimer(region, tokenState) {
+    const timerKey = 'wowtoken-' + region;
+    if (realmQueue.timers[timerKey]) {
+        clearTimeout(realmQueue.timers[timerKey]);
+    }
+    delete realmQueue.timers[timerKey];
+
+    const now = Date.now();
+    let delay = 5 * Constants.MS_MINUTE;
+
+    if (tokenState.snapshot) {
+        const nextExpected = tokenState.snapshot + TOKEN_INTERVAL;
+        if (nextExpected > now) {
+            delay = nextExpected - now;
+        }
+    }
+
+    logMsg(region + " token: Next check in " + (Math.round(delay / Constants.MS_MINUTE * 100) / 100) + " minutes.");
+
+    realmQueue.timers[timerKey] = setTimeout(() => {
+        delete realmQueue.timers[timerKey];
+        checkToken(region);
+    }, delay);
 }
 
 //             //
@@ -270,7 +362,6 @@ function setPendingTimer(connectedRealmId, realmState) {
  * @return {object}
  */
 async function fetchRealmList() {
-    const regions = [api.REGION_US, api.REGION_EU];
     const result = {};
 
     for (let region, x = 0; region = regions[x]; x++) {
