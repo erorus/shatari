@@ -219,7 +219,7 @@ function setPendingTokenTimer(region, tokenState) {
         }
     }
 
-    logMsg(region + " token: Next check in " + (Math.round(delay / Constants.MS_MINUTE * 100) / 100) + " minutes.");
+    logMsg(region + " token: Next check at " + dateFormat(new Date(now + delay), 'yyyy-mm-dd HH:MM:ss'));
 
     realmQueue.timers[timerKey] = setTimeout(() => {
         delete realmQueue.timers[timerKey];
