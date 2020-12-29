@@ -8,8 +8,6 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
-    const COPPER_SILVER = 100;
-    const MS_SEC = 1000;
     const VERSION = 4;
 
     // ------ //
@@ -68,15 +66,15 @@ module.exports = new function () {
         }
 
         const result = {};
-        result.snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
-        result.price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;
+        result.snapshot = buf.readUInt32LE(advance(4)) * Constants.MS_SEC;
+        result.price = buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER;
         result.quantity = buf.readUInt32LE(advance(4));
 
         /* skip reading auctions, we don't need them
         result.auctions = [];
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             result.auctions.push([
-                buf.readUInt32LE(advance(4)) * COPPER_SILVER,
+                buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER,
                 buf.readUInt32LE(advance(4)),
             ]);
         }
@@ -88,7 +86,7 @@ module.exports = new function () {
         result.specifics = [];
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             let specData = [
-                buf.readUInt32LE(advance(4)) * COPPER_SILVER,
+                buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER,
                 buf.readUInt8(advance(1)),
                 []
             ];
@@ -113,8 +111,8 @@ module.exports = new function () {
         result.snapshots = [];
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             result.snapshots.push([
-                buf.readUInt32LE(advance(4)) * MS_SEC,
-                buf.readUInt32LE(advance(4)) * COPPER_SILVER,
+                buf.readUInt32LE(advance(4)) * Constants.MS_SEC,
+                buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER,
                 buf.readUInt32LE(advance(4)),
             ]);
         }
@@ -169,21 +167,21 @@ module.exports = new function () {
         buf.writeUInt8(VERSION, advance(1));
 
         // Current stats
-        buf.writeUInt32LE((state.snapshot || 0) / MS_SEC, advance(4));
-        buf.writeUInt32LE((state.price || 0) / COPPER_SILVER, advance(4));
+        buf.writeUInt32LE((state.snapshot || 0) / Constants.MS_SEC, advance(4));
+        buf.writeUInt32LE((state.price || 0) / Constants.COPPER_SILVER, advance(4));
         buf.writeUInt32LE(state.quantity || 0, advance(4));
 
         // Current auctions list
         buf.writeUInt16LE((state.auctions || []).length, advance(2));
         (state.auctions || []).forEach((auction) => {
-            buf.writeUInt32LE(auction[0] / COPPER_SILVER, advance(4));
+            buf.writeUInt32LE(auction[0] / Constants.COPPER_SILVER, advance(4));
             buf.writeUInt32LE(auction[1], advance(4));
         });
 
         // Specifics list
         buf.writeUInt16LE((state.specifics || []).length, advance(2));
         (state.specifics || []).forEach(spec => {
-            buf.writeUInt32LE(spec[0] / COPPER_SILVER, advance(4));
+            buf.writeUInt32LE(spec[0] / Constants.COPPER_SILVER, advance(4));
             buf.writeUInt8(spec[1].length, advance(1));
             spec[1].forEach(modifier => {
                 buf.writeUInt16LE(modifier[0], advance(2));
@@ -198,8 +196,8 @@ module.exports = new function () {
         // Snapshot list
         buf.writeUInt16LE((state.snapshots || []).length, advance(2));
         (state.snapshots || []).forEach((snapshot) => {
-            buf.writeUInt32LE(snapshot[0] / MS_SEC, advance(4));
-            buf.writeUInt32LE(snapshot[1] / COPPER_SILVER, advance(4));
+            buf.writeUInt32LE(snapshot[0] / Constants.MS_SEC, advance(4));
+            buf.writeUInt32LE(snapshot[1] / Constants.COPPER_SILVER, advance(4));
             buf.writeUInt32LE(snapshot[2], advance(4));
         });
 
