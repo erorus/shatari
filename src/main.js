@@ -14,7 +14,7 @@ const GlobalState = require('./globalState');
 const Constants = require('./constants');
 
 const api = new BNet();
-const regions = [api.REGION_US, api.REGION_EU];
+const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
 
 const CONCURRENT_REALM_LIMIT = 4;
 

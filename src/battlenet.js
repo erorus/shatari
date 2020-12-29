@@ -10,6 +10,8 @@ module.exports = function () {
 
     this.REGION_US = 'us';
     this.REGION_EU = 'eu';
+    this.REGION_TW = 'tw';
+    this.REGION_KR = 'kr';
 
     // ********************* //
     // ***** VARIABLES ***** //
