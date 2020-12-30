@@ -1,10 +1,12 @@
 const process = require('process');
 const fs = require('fs').promises;
+const syncFs = require('fs');
 const Path = require('path');
 
 const dateFormat = require('dateformat');
 const BNet = require('./battlenet');
 const RunOnce = require('./runOnce');
+const luaQuote = require('./luaQuote');
 
 const RealmState = require('./realmState');
 const Constants = require('./constants');
@@ -93,6 +95,7 @@ async function processRegion(region) {
     let connectedRealms = getConnectedRealmsForRegion(region);
     let knownItemKeys = {};
     let usedRealmStates = {};
+    let guidLua = [];
 
     for (let connectedId in connectedRealms) {
         if (!connectedRealms.hasOwnProperty(connectedId)) {
@@ -114,6 +117,9 @@ async function processRegion(region) {
             continue;
         }
 
+        let realmIndex = usedRealmStates.length;
+        guidLua.push(`[${connectedRealm.canonical.id}]=${realmIndex}`);
+        connectedRealm.secondary.forEach(realm => guidLua.push(`[${realm.id}]=${realmIndex}`));
         usedRealmStates[connectedRealm.id] = realmState;
         logMsg("Scanning " + region + " connected realm " + connectedRealm.id + " (" + connectedRealm.canonical.name + ")");
 
@@ -131,6 +137,7 @@ async function processRegion(region) {
             }
         }
     }
+    guidLua = guidLua.join(',');
 
     knownItemKeys = Object.keys(knownItemKeys);
     knownItemKeys.sort((a, b) => {
@@ -143,6 +150,28 @@ async function processRegion(region) {
 
     let usedConnectedIds = Object.keys(usedRealmStates);
     usedConnectedIds.sort((a, b) => parseInt(a) - parseInt(b));
+
+    let luaPath = Path.resolve(__dirname, '..', 'addon', 'data.' + region + '.lua');
+    let luaStream = syncFs.createWriteStream(luaPath);
+    await luaStream.write(`
+local addonName, addonTable = ...
+addonTable.dataLoads = addonTable.dataLoads or {}
+
+local realmIndex
+local dataFuncs = {}
+
+local loc_substr = string.sub
+
+local headerSize = 4
+local recordSize = 5
+local function crop(b)
+    local offset = 1 + headerSize + recordSize * realmIndex
+
+    return loc_substr(b, 1, headerSize)..loc_substr(b, offset, offset + recordSize - 1)
+end
+`);
+    let luaLines = 0;
+    let dataFuncIndex = 0;
 
     let lineBufferSize = 4 + usedConnectedIds.length * (1 + 4);
     let nextLog = Date.now() + 5 * Constants.MS_SEC;
@@ -217,9 +246,54 @@ async function processRegion(region) {
             nextLog = Date.now() + 5 * Constants.MS_SEC;
         }
 
-        // TODO: write buf to lua somehow
+        if (luaLines === 0) {
+            dataFuncIndex++;
+            await luaStream.write(`dataFuncs[${dataFuncIndex}] = function()\nlocal md = addonTable.marketData\n`);
+        }
+
+        await luaStream.write(Buffer.concat([
+            Buffer.from(`md['${itemKeyString}']=crop(`),
+            luaQuote(buf),
+            Buffer.from(')\n'),
+        ]));
+
+        if (++luaLines >= 2000) {
+            await luaStream.write('end\n');
+            luaLines = 0;
+        }
+    }
+    if (luaLines > 0) {
+        await luaStream.write('end\n');
     }
 
+    await luaStream.write(`
+local dataLoad = function(realmId)
+    local realmGuids = {${guidLua}}
+    realmIndex = realmGuids[realmId]
+
+    if realmIndex == nil then
+        wipe(dataFuncs)
+        return false
+    end
+
+    addonTable.marketData = {}
+    addonTable.realmIndex = realmIndex
+    addonTable.dataAge = ${now / Constants.MS_SEC}
+    addonTable.region = "${region.toUpperCase()}"
+
+    for i=1,#dataFuncs,1 do
+        dataFuncs[i]()
+        dataFuncs[i]=nil
+    end
+
+    wipe(dataFuncs)
+    return true
+end
+
+table.insert(addonTable.dataLoads, dataLoad)
+`);
+
+    luaStream.end();
     logMsg("Finished with region " + region);
 }
 
