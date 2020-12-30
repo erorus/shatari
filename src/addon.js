@@ -202,26 +202,26 @@ end
             } else if (!summaryData) {
                 days = 0;
             } else {
-                days = Math.min(250, Math.floor(Math.max(0, now - summaryData.snapshot) / Constants.MS_DAY));
+                days = Math.min(251, Math.floor(Math.max(0, now - summaryData.snapshot) / Constants.MS_DAY));
             }
             buf.writeUInt8(days, offset++);
 
             if (!summaryData) {
-                buf.writeUInt32LE(0, offset);
+                buf.writeUInt32BE(0, offset);
 
                 return;
             }
 
             let itemState = await ItemState.get(connectedId, itemKeyString);
             if (!itemState || !itemState.snapshots) {
-                buf.writeUInt32LE(0, offset);
+                buf.writeUInt32BE(0, offset);
 
                 return;
             }
 
             let priceList = getPriceList(usedRealmStates[connectedId], itemState);
             if (!priceList.length) {
-                buf.writeUInt32LE(0, offset);
+                buf.writeUInt32BE(0, offset);
 
                 return;
             }
@@ -233,7 +233,7 @@ end
                 median = Math.round(median / 2);
             }
 
-            buf.writeUInt32LE(median, offset);
+            buf.writeUInt32BE(median, offset);
 
             priceSum += median;
             priceCount++;
@@ -244,7 +244,7 @@ end
         }
         await Promise.all(promises);
 
-        buf.writeUInt32LE(priceSum / priceCount, 0);
+        buf.writeUInt32BE(priceSum / priceCount, 0);
         if (nextLog <= Date.now()) {
             logMsg("Processed " + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
             nextLog = Date.now() + 5 * Constants.MS_SEC;
@@ -282,7 +282,7 @@ local dataLoad = function(realmId)
 
     addonTable.marketData = {}
     addonTable.realmIndex = realmIndex
-    addonTable.dataAge = ${now / Constants.MS_SEC}
+    addonTable.dataAge = ${Math.floor(now / Constants.MS_SEC)}
     addonTable.region = "${region.toUpperCase()}"
 
     for i=1,#dataFuncs,1 do

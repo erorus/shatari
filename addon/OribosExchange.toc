@@ -1,0 +1,13 @@
+## Interface: 90002
+## Title: Oribos Exchange
+## Notes: Alpha
+## OptionalDeps: Auctionator, AuctionLite, LibExtraTip
+## SavedVariablesPerCharacter: OETooltipsHidden, OETooltipsSettings
+## Version: 0.1
+
+libs\LibExtraTip\Load.xml
+
+GetDetailedItemLevelInfo.lua
+data.us.lua
+OribosExchange.lua
+
