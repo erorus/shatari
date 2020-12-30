@@ -145,6 +145,7 @@ async function processRegion(region) {
     usedConnectedIds.sort((a, b) => parseInt(a) - parseInt(b));
 
     let lineBufferSize = 4 + usedConnectedIds.length * (1 + 4);
+    let nextLog = Date.now() + 5 * Constants.MS_SEC;
     for (let itemKeyString, itemKeyIndex = 0; itemKeyString = knownItemKeys[itemKeyIndex]; itemKeyIndex++) {
         let itemKey = ItemKeySerialize.parse(itemKeyString);
         let item = itemList[itemKey.itemId];
@@ -154,18 +155,12 @@ async function processRegion(region) {
 
         // Interleaved list of days,price;days,price;days,price;...
         let buf = Buffer.allocUnsafe(lineBufferSize);
-        let cursorPosition = 4;
-        let advance = function (size) {
-            let res = cursorPosition;
-            cursorPosition += size;
-
-            return res;
-        };
 
         let priceSum = 0;
         let priceCount = 0;
 
-        let processItemInRealm = async function (connectedId) {
+        let processItemInRealm = async function (connectedId, realmIndex) {
+            let offset = 4 + realmIndex * (1 + 4);
             let summaryData = usedRealmStates[connectedId].summary[itemKeyString];
             let days;
 
@@ -176,24 +171,24 @@ async function processRegion(region) {
             } else {
                 days = Math.min(250, Math.floor(Math.max(0, now - summaryData.snapshot) / Constants.MS_DAY));
             }
-            buf.writeUInt8(days, advance(1));
+            buf.writeUInt8(days, offset++);
 
             if (!summaryData) {
-                buf.writeUInt32LE(0, advance(4));
+                buf.writeUInt32LE(0, offset);
 
                 return;
             }
 
             let itemState = await ItemState.get(connectedId, itemKeyString);
             if (!itemState || !itemState.snapshots) {
-                buf.writeUInt32LE(0, advance(4));
+                buf.writeUInt32LE(0, offset);
 
                 return;
             }
 
             let priceList = getPriceList(usedRealmStates[connectedId], itemState);
             if (!priceList.length) {
-                buf.writeUInt32LE(0, advance(4));
+                buf.writeUInt32LE(0, offset);
 
                 return;
             }
@@ -205,16 +200,22 @@ async function processRegion(region) {
                 median = Math.round(median / 2);
             }
 
-            buf.writeUInt32LE(median, advance(4));
+            buf.writeUInt32LE(median, offset);
 
             priceSum += median;
             priceCount++;
         }
+        let promises = [];
         for (let connectedId, connectedIndex = 0; connectedId = usedConnectedIds[connectedIndex]; connectedIndex++) {
-            await processItemInRealm(connectedId);
+            promises.push(processItemInRealm(connectedId, connectedIndex));
         }
+        await Promise.all(promises);
 
         buf.writeUInt32LE(priceSum / priceCount, 0);
+        if (nextLog <= Date.now()) {
+            logMsg("Processed " + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
+            nextLog = Date.now() + 5 * Constants.MS_SEC;
+        }
 
         // TODO: write buf to lua somehow
     }
