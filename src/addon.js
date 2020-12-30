@@ -203,7 +203,7 @@ end
             } else if (!summaryData) {
                 days = 0;
             } else {
-                days = Math.min(251, Math.floor(Math.max(0, now - summaryData.snapshot) / Constants.MS_DAY));
+                days = Math.min(251, Math.floor(Math.max(0, now - summaryData[0]) / Constants.MS_DAY));
             }
             buf.writeUInt8(days, offset++);
 
