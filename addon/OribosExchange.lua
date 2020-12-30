@@ -93,10 +93,47 @@ local function getSpeciesFromPetLink(link)
 end
 
 local marketInfoCache, marketInfoCacheKeys, marketInfoCacheMaxDepth = {}, {}, 16
-local GetDetailedItemLevelInfo = addonTable.GetDetailedItemLevelInfo
 
 local function InfoCacheKeyComparitor(x,y)
-    return marketInfoCache[x]['__queried'] < marketInfoCache[y]['__queried']
+    return (marketInfoCache[x] and marketInfoCache[x]['__queried'] or 0) <
+           (marketInfoCache[y] and marketInfoCache[y]['__queried'] or 0)
+end
+
+-- The auction house UI builds its own fake tooltip via the base item plus a custom item level and suffix. This mess
+-- helps us pull out the item key they use to show that tooltip so we know the correct item level.
+local browseItemKey
+local function onBrowseLineEnter(line, rowData)
+    if rowData and rowData.itemKey then
+        browseItemKey = rowData.itemKey
+    end
+end
+local function onBrowseLineLeave()
+    browseItemKey = nil
+end
+local function checkAuctionHouseLineHandlers()
+    if not AuctionHouseFrame then return end
+
+    local oldEnter = AuctionHouseFrame.BrowseResultsFrame.ItemList.lineOnEnterCallback;
+    local oldLeave = AuctionHouseFrame.BrowseResultsFrame.ItemList.lineOnLeaveCallback;
+    if not (oldEnter and oldLeave) then return end
+
+    AuctionHouseFrame.BrowseResultsFrame.ItemList:SetLineOnEnterCallback(function (...)
+        onBrowseLineEnter(...)
+        oldEnter(...)
+    end)
+    AuctionHouseFrame.BrowseResultsFrame.ItemList:SetLineOnLeaveCallback(function (...)
+        onBrowseLineLeave(...)
+        oldLeave(...)
+    end)
+
+    return true
+end
+local function getActiveItemKey()
+    if browseItemKey then return browseItemKey end
+    if not AuctionHouseFrame then return end
+    if GameTooltip:GetOwner() == AuctionHouseFrame.ItemBuyFrame.ItemDisplay.ItemButton then
+        return AuctionHouseFrame.ItemBuyFrame.ItemDisplay.itemKey
+    end
 end
 
 --[[
@@ -121,12 +158,17 @@ function OEMarketInfo(item,...)
     end
 
     if not addonTable.marketData then return tr end
+    local cacheKey = item
+    local activeItemKey = getActiveItemKey()
+    if activeItemKey then
+        cacheKey = cacheKey .. '~~~' .. activeItemKey.itemID .. '-' .. activeItemKey.itemLevel .. '-' .. activeItemKey.itemSuffix
+    end
 
-    if marketInfoCache[item] then
-        marketInfoCache[item]['__queried'] = GetTime()
-        if not marketInfoCache[item]['input'] then return tr end
+    if marketInfoCache[cacheKey] then
+        marketInfoCache[cacheKey]['__queried'] = GetTime()
+        if not marketInfoCache[cacheKey]['input'] then return tr end
         if not tr then tr = {} end
-        for k,v in pairs(marketInfoCache[item]) do
+        for k,v in pairs(marketInfoCache[cacheKey]) do
             tr[k] = v
         end
         tr['__queried'] = nil
@@ -136,8 +178,8 @@ function OEMarketInfo(item,...)
     if #marketInfoCacheKeys >= marketInfoCacheMaxDepth then
         -- reuse oldest cache table
         sort(marketInfoCacheKeys, InfoCacheKeyComparitor)
-        marketInfoCache[item] = marketInfoCache[marketInfoCacheKeys[1]]
-        wipe(marketInfoCache[item])
+        marketInfoCache[cacheKey] = marketInfoCache[marketInfoCacheKeys[1]] or {}
+        wipe(marketInfoCache[cacheKey])
 
         while #marketInfoCacheKeys >= marketInfoCacheMaxDepth do
             marketInfoCache[marketInfoCacheKeys[1]] = nil
@@ -145,13 +187,13 @@ function OEMarketInfo(item,...)
         end
     else
         -- add new table to cache
-        marketInfoCache[item] = {}
+        marketInfoCache[cacheKey] = {}
     end
     table.insert(marketInfoCacheKeys, item)
-    marketInfoCache[item]['__queried'] = GetTime()
+    marketInfoCache[cacheKey]['__queried'] = GetTime()
 
     local _, link, dataKey
-    local iid, pricingLevel, species, quality
+    local iid, species, quality
 
     if (strfind(item, 'battlepet:')) then
         species, _, quality = getSpeciesFromPetLink(item)
@@ -163,21 +205,35 @@ function OEMarketInfo(item,...)
         iid = itemId
         dataKey = tostring(iid)
 
-        pricingLevel = 0
         if (itemClass == 2) or (itemClass == 4) then
-            local effectiveLevel, previewLevel, origLevel = GetDetailedItemLevelInfo(item)
-            -- effectiveLevel may be nil when GetItemInfo didn't have the item readily available.
-            if effectiveLevel then
-                pricingLevel = effectiveLevel
-                if not addonTable.marketData[dataKey .. '-' .. pricingLevel] then
-                    -- todo: random enchant names
-                    pricingLevel = 0
+            local effectiveLevel
+            local nameId
+
+            local activeItemKey = getActiveItemKey()
+            if activeItemKey and activeItemKey.itemID == itemId then
+                if activeItemKey.itemLevel > 0 then
+                    effectiveLevel = activeItemKey.itemLevel
+                    if activeItemKey.itemSuffix > 0 then
+                        nameId = activeItemKey.itemSuffix
+                    end
                 end
             end
-        end
 
-        if pricingLevel > 0 then
-            dataKey = dataKey .. '-' .. pricingLevel
+            effectiveLevel = effectiveLevel or GetDetailedItemLevelInfo(item)
+            -- effectiveLevel may be nil when GetItemInfo didn't have the item readily available.
+            if effectiveLevel then
+                nameId = nameId or addonTable.getNameId(item)
+
+                local testKey
+                if nameId then
+                    testKey = dataKey .. '-' .. effectiveLevel .. '-' .. nameId
+                else
+                    testKey = dataKey .. '-' .. effectiveLevel
+                end
+                if addonTable.marketData[testKey] then
+                    dataKey = testKey
+                end
+            end
         end
     end
 
@@ -213,7 +269,7 @@ function OEMarketInfo(item,...)
     -- offset = offset + priceSize
 
     for k,v in pairs(tr) do
-        marketInfoCache[item][k] = v
+        marketInfoCache[cacheKey][k] = v
     end
 
     return tr
@@ -309,7 +365,6 @@ local function printHelp()
 end
 
 local dataResults = {}
-
 local function onTooltipSetItem(tooltip, itemLink, quantity)
     if not addonTable.marketData then return end
     if not tooltipsEnabled then return end
@@ -366,6 +421,10 @@ local function onEvent(self,event,arg)
     elseif event == "ADDON_LOADED" and arg == addonName then
         tooltipsEnabled = not _G["OETooltipsHidden"]
         tooltipsSettings = _G["OETooltipsSettings"] or {}
+    elseif event == "AUCTION_HOUSE_SHOW" then
+        if checkAuctionHouseLineHandlers() then
+            eventframe:UnregisterEvent("AUCTION_HOUSE_SHOW")
+        end
     elseif event == "PLAYER_LOGOUT" then
         _G["OETooltipsHidden"] = not tooltipsEnabled
         _G["OETooltipsSettings"] = tooltipsSettings
@@ -374,6 +433,7 @@ end
 
 eventframe:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventframe:RegisterEvent("ADDON_LOADED")
+eventframe:RegisterEvent("AUCTION_HOUSE_SHOW")
 eventframe:RegisterEvent("PLAYER_LOGOUT")
 eventframe:SetScript("OnEvent", onEvent)
 

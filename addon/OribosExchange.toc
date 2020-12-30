@@ -7,7 +7,7 @@
 
 libs\LibExtraTip\Load.xml
 
-GetDetailedItemLevelInfo.lua
+bonusToName.lua
 data.us.lua
 OribosExchange.lua
 

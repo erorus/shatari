@@ -44,6 +44,7 @@ async function main() {
     logMsg('' + Object.keys(itemList).length + ' items in list.');
 
     let promises = [];
+    promises.push(generateBonusToNameId());
     regions.forEach(region => promises.push(processRegion(region)));
     await Promise.all(promises);
 
@@ -299,6 +300,64 @@ table.insert(addonTable.dataLoads, dataLoad)
 
     luaStream.end();
     logMsg("Finished with region " + region);
+}
+
+async function generateBonusToNameId() {
+    const BONUSES_PATH = Path.resolve(__dirname, '..', 'bonuses.json');
+    const bonusData = JSON.parse(await fs.readFile(BONUSES_PATH));
+
+    let namesLua = [];
+    for (let bonusId in bonusData.names) {
+        if (!bonusData.names.hasOwnProperty(bonusId)) {
+            continue;
+        }
+
+        namesLua.push(`[${bonusId}]={${bonusData.names[bonusId].join(',')}}`);
+    }
+    namesLua = namesLua.join(',');
+
+    const luaPath = Path.resolve(__dirname, '..', 'addon', 'bonusToName.lua');
+    let luaStream = syncFs.createWriteStream(luaPath);
+    await luaStream.write(Buffer.from([0xEF, 0xBB, 0xBF]));
+    await luaStream.write(`
+local addonName, addonTable = ...
+
+local namesByBonus = {${namesLua}}
+
+local function getNameId(item)
+    local _, link = GetItemInfo(item)
+    if not link then
+        return nil
+    end
+
+    local itemString = string.match(link, "item[%-?%d:]+")
+    local itemStringParts = { strsplit(":", itemString) }
+
+    local numBonuses = tonumber(itemStringParts[14],10) or 0
+
+    if numBonuses == 0 then
+        return nil
+    end
+
+    local name, namePrio
+
+    for y = 1,numBonuses,1 do
+        local bonus = tonumber(itemStringParts[14+y], 10) or 0
+        local nameInfo = namesByBonus[bonus]
+        if nameInfo then
+            if name == nil or namePrio > nameInfo > nameInfo[1] then
+                namePrio = nameInfo[1]
+                name = nameInfo[2]
+            end
+        end
+    end
+
+    return name
+end
+
+addonTable.getNameId = getNameId
+`);
+    luaStream.end();
 }
 
 function getPriceList(realmState, itemState) {
