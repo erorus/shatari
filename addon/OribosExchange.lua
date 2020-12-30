@@ -312,6 +312,8 @@ local qualityRGB = {
 }
 
 local LibExtraTip = LibStub("LibExtraTip-1")
+local regionName = "Regional"
+local realmName = "Realm"
 
 local function buildExtraTip(tooltip, pricingData)
     local r,g,b = .9,.8,.5
@@ -322,14 +324,12 @@ local function buildExtraTip(tooltip, pricingData)
         LibExtraTip:AddLine(tooltip,"As of "..SecondsToTime(pricingData['age'],pricingData['age']>60).." ago:",r,g,b,true)
     end
 
-    if pricingData['market'] and not tooltipsSettings['disable-market'] then
-        LibExtraTip:AddDoubleLine(tooltip,"Realm AH",coins(pricingData['market']),r,g,b,nil,nil,nil,true)
+    if pricingData['market'] and pricingData['market'] > 0 and not tooltipsSettings['disable-market'] then
+        LibExtraTip:AddDoubleLine(tooltip,realmName,coins(pricingData['market']),r,g,b,nil,nil,nil,true)
     end
 
-    local regionName = addonTable.region or "Regional"
-
     if pricingData['region'] and not tooltipsSettings['disable-region'] then
-        LibExtraTip:AddDoubleLine(tooltip,regionName.." Median",coins(pricingData['region']),r,g,b,nil,nil,nil,true)
+        LibExtraTip:AddDoubleLine(tooltip,regionName,coins(pricingData['region']),r,g,b,nil,nil,nil,true)
     end
 
     if not tooltipsSettings['disable-lastSeen'] then
@@ -408,6 +408,8 @@ local function onEvent(self,event,arg)
         elseif not addonTable.marketData then
             print(prettyName .. " - Warning: no data loaded!")
         else
+            regionName = addonTable.region .. " Region"
+            realmName = GetRealmName()
             if not tooltipsEnabled then
                 print(prettyName .. " - Tooltip prices disabled. Run |cFFFFFF78/oetooltip on|r to enable.")
             end
