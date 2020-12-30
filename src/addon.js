@@ -95,7 +95,6 @@ async function processRegion(region) {
     let connectedRealms = getConnectedRealmsForRegion(region);
     let knownItemKeys = {};
     let usedRealmStates = {};
-    let guidLua = [];
 
     for (let connectedId in connectedRealms) {
         if (!connectedRealms.hasOwnProperty(connectedId)) {
@@ -117,9 +116,6 @@ async function processRegion(region) {
             continue;
         }
 
-        let realmIndex = usedRealmStates.length;
-        guidLua.push(`[${connectedRealm.canonical.id}]=${realmIndex}`);
-        connectedRealm.secondary.forEach(realm => guidLua.push(`[${realm.id}]=${realmIndex}`));
         usedRealmStates[connectedRealm.id] = realmState;
         logMsg("Scanning " + region + " connected realm " + connectedRealm.id + " (" + connectedRealm.canonical.name + ")");
 
@@ -137,7 +133,6 @@ async function processRegion(region) {
             }
         }
     }
-    guidLua = guidLua.join(',');
 
     knownItemKeys = Object.keys(knownItemKeys);
     knownItemKeys.sort((a, b) => {
@@ -151,8 +146,17 @@ async function processRegion(region) {
     let usedConnectedIds = Object.keys(usedRealmStates);
     usedConnectedIds.sort((a, b) => parseInt(a) - parseInt(b));
 
+    let guidLua = [];
+    for (let realmIndex = 0; realmIndex < usedConnectedIds.length; realmIndex++) {
+        let connectedRealm = connectedRealms[usedConnectedIds[realmIndex]];
+        guidLua.push(`[${connectedRealm.canonical.id}]=${realmIndex}`);
+        connectedRealm.secondary.forEach(realm => guidLua.push(`[${realm.id}]=${realmIndex}`));
+    }
+    guidLua = guidLua.join(',');
+
     let luaPath = Path.resolve(__dirname, '..', 'addon', 'data.' + region + '.lua');
     let luaStream = syncFs.createWriteStream(luaPath);
+    await luaStream.write(Buffer.from([0xEF, 0xBB, 0xBF]));
     await luaStream.write(`
 local addonName, addonTable = ...
 addonTable.dataLoads = addonTable.dataLoads or {}
