@@ -7,7 +7,7 @@
 
 libs\LibExtraTip\Load.xml
 
-bonusToName.lua
-data.us.lua
+dynamic\bonusToName.lua
+dynamic\data.us.lua
 OribosExchange.lua
 

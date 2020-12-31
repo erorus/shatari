@@ -1,5 +1,4 @@
 .idea
 go.sh
 node_modules/
-addon/data.*.lua
-addon/bonusToName.lua
+addon/dynamic/

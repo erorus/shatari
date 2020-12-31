@@ -156,7 +156,7 @@ async function processRegion(region) {
     }
     guidLua = guidLua.join(',');
 
-    let luaPath = Path.resolve(__dirname, '..', 'addon', 'data.' + region + '.lua');
+    let luaPath = Path.resolve(__dirname, '..', 'addon', 'dynamic', 'data.' + region + '.lua');
     let luaStream = syncFs.createWriteStream(luaPath);
     await luaStream.write(Buffer.from([0xEF, 0xBB, 0xBF]));
     await luaStream.write(`
@@ -321,7 +321,7 @@ async function generateBonusToNameId() {
     }
     namesLua = namesLua.join(',');
 
-    const luaPath = Path.resolve(__dirname, '..', 'addon', 'bonusToName.lua');
+    const luaPath = Path.resolve(__dirname, '..', 'addon', 'dynamic', 'bonusToName.lua');
     let luaStream = syncFs.createWriteStream(luaPath);
     await luaStream.write(Buffer.from([0xEF, 0xBB, 0xBF]));
     await luaStream.write(`
