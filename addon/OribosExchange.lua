@@ -42,6 +42,7 @@ This is useful for other addons (Auctioneer, TSM, etc) that have their own fancy
 
 local floor = math.floor
 local tinsert, tonumber = tinsert, tonumber
+local strLen, strByte, strSub = string.len, string.byte, string.sub
 
 local function coins(money)
     local GOLD="ffd100"
@@ -64,9 +65,9 @@ local function coins(money)
 end
 
 local function char2dec(s)
-    local n, l = 0, string.len(s)
+    local n, l = 0, strLen(s)
     for i=1,l,1 do
-        n = n * 256 + string.byte(s,i)
+        n = n * 256 + strByte(s,i)
     end
     return n
 end
@@ -255,17 +256,17 @@ function OEMarketInfo(item,...)
         tr['age'] = time() - addonTable.dataAge
     end
 
-    local priceSize = 4
-    local offset = 1
+    local priceSize = strByte(dta, 1)
+    local offset = 2
 
-    tr['region'] = round(char2dec(string.sub(dta, offset, offset+priceSize-1))) * 100
+    tr['region'] = round(char2dec(strSub(dta, offset, offset+priceSize-1))) * 100
     if tr['region'] == 0 then tr['region'] = nil end
     offset = offset + priceSize
 
-    tr['days'] = string.byte(dta, offset, offset)
+    tr['days'] = strByte(dta, offset, offset)
     offset = offset + 1
 
-    tr['market'] = round(char2dec(string.sub(dta, offset, offset+priceSize-1))) * 100
+    tr['market'] = round(char2dec(strSub(dta, offset, offset+priceSize-1))) * 100
     -- offset = offset + priceSize
 
     for k,v in pairs(tr) do

@@ -146,9 +146,10 @@ async function processRegion(region) {
 
     let usedConnectedIds = Object.keys(usedRealmStates);
     usedConnectedIds.sort((a, b) => parseInt(a) - parseInt(b));
+    let realmCount = usedConnectedIds.length;
 
     let guidLua = [];
-    for (let realmIndex = 0; realmIndex < usedConnectedIds.length; realmIndex++) {
+    for (let realmIndex = 0; realmIndex < realmCount; realmIndex++) {
         let connectedRealm = connectedRealms[usedConnectedIds[realmIndex]];
         guidLua.push(`[${connectedRealm.canonical.id}]=${realmIndex}`);
         connectedRealm.secondary.forEach(realm => guidLua.push(`[${realm.id}]=${realmIndex}`));
@@ -167,9 +168,10 @@ local dataFuncs = {}
 
 local loc_substr = string.sub
 
-local headerSize = 4
-local recordSize = 5
-local function crop(b)
+local function crop(priceSize, b)
+    local headerSize = 1 + priceSize
+    local recordSize = 1 + priceSize
+
     local offset = 1 + headerSize + recordSize * realmIndex
 
     return loc_substr(b, 1, headerSize)..loc_substr(b, offset, offset + recordSize - 1)
@@ -178,7 +180,6 @@ end
     let luaLines = 0;
     let dataFuncIndex = 0;
 
-    let lineBufferSize = 4 + usedConnectedIds.length * (1 + 4);
     let nextLog = Date.now() + 5 * Constants.MS_SEC;
     for (let itemKeyString, itemKeyIndex = 0; itemKeyString = knownItemKeys[itemKeyIndex]; itemKeyIndex++) {
         let itemKey = ItemKeySerialize.parse(itemKeyString);
@@ -187,12 +188,11 @@ end
             return;
         }
 
-        // Interleaved list of days,price;days,price;days,price;...
-        let buf = Buffer.allocUnsafe(lineBufferSize);
         let regionPrices = [];
+        let realmDays = new Uint8Array(realmCount);
+        let realmPrices = new Uint32Array(realmCount);
 
         let processItemInRealm = async function (connectedId, realmIndex) {
-            let offset = 4 + realmIndex * (1 + 4);
             let summaryData = usedRealmStates[connectedId].summary[itemKeyString];
             let days;
 
@@ -203,30 +203,24 @@ end
             } else {
                 days = Math.min(251, Math.floor(Math.max(0, now - summaryData[0]) / Constants.MS_DAY));
             }
-            buf.writeUInt8(days, offset++);
+            realmDays[realmIndex] = days;
 
             if (!summaryData) {
-                buf.writeUInt32BE(0, offset);
-
                 return;
             }
 
             let itemState = await ItemState.get(connectedId, itemKeyString);
             if (!itemState || !itemState.snapshots) {
-                buf.writeUInt32BE(0, offset);
-
                 return;
             }
 
             let priceList = getPriceList(usedRealmStates[connectedId], itemState);
             if (!priceList.length) {
-                buf.writeUInt32BE(0, offset);
-
                 return;
             }
 
             let median = getMedian(priceList);
-            buf.writeUInt32BE(median, offset);
+            realmPrices[realmIndex] = median;
             regionPrices.push(median);
         }
         let promises = [];
@@ -235,11 +229,26 @@ end
         }
         await Promise.all(promises);
 
-        buf.writeUInt32BE(getMedian(regionPrices), 0);
+        // Scan all the prices to find the minimum required number of bytes.
+        let priceSize = 1;
+        for (let priceIndex = 0; (priceSize < 4) && (priceIndex < realmCount); priceIndex++) {
+            while (realmPrices[priceIndex] >= (1 << (priceSize * 8))) {
+                if (++priceSize >= 4) {
+                    break;
+                }
+            }
+        }
 
-        if (nextLog <= Date.now()) {
-            logMsg("Processed " + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
-            nextLog = Date.now() + 5 * Constants.MS_SEC;
+        let lineBufferSize = 1 + priceSize * (realmCount + 1) + 1 * realmCount;
+        // Interleaved list of days,price;days,price;days,price;...
+        let buf = Buffer.allocUnsafe(lineBufferSize);
+        buf.writeUInt8(priceSize, 0);
+        buf.writeUIntBE(getMedian(regionPrices), 1, priceSize);
+        let offset = 1 + priceSize;
+        for (let index = 0; index < realmCount; index++) {
+            buf.writeUInt8(realmDays[index], offset++);
+            buf.writeUIntBE(realmPrices[index], offset, priceSize);
+            offset += priceSize;
         }
 
         if (luaLines === 0) {
@@ -248,7 +257,7 @@ end
         }
 
         await luaStream.write(Buffer.concat([
-            Buffer.from(`md['${itemKeyString}']=crop(`),
+            Buffer.from(`md['${itemKeyString}']=crop(${priceSize},`),
             luaQuote(buf),
             Buffer.from(')\n'),
         ]));
@@ -256,6 +265,11 @@ end
         if (++luaLines >= 2000) {
             await luaStream.write('end\n');
             luaLines = 0;
+        }
+
+        if (nextLog <= Date.now()) {
+            logMsg("Processed " + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
+            nextLog = Date.now() + 5 * Constants.MS_SEC;
         }
     }
     if (luaLines > 0) {
