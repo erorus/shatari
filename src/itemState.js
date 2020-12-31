@@ -38,10 +38,17 @@ module.exports = new function () {
         try {
             buf = await ungzip(compressed);
         } catch (e) {
-            console.log("Realm " + connectedRealmId + " Error unzipping item " + itemKey);
-            console.log(e);
+            // We retry after the first fail, since some other process may be writing to this.
+            await new Promise(resolve => setTimeout(resolve, 500));
 
-            return {};
+            try {
+                buf = await ungzip(await fs.readFile(path));
+            } catch (e) {
+                console.log("Realm " + connectedRealmId + " Error unzipping item " + itemKey);
+                console.log(e);
+
+                return {};
+            }
         }
 
         let cursorPosition = 0;
