@@ -346,8 +346,9 @@ async function pauseAddon(pause) {
         return;
     }
 
+    let stdout;
     try {
-        let stdout = await cp.exec('lsof -F p "' + sockPath + '"');
+        stdout = await cp.exec('lsof -F p "' + sockPath + '"');
     } catch (e) {
         logMsg("Could not determine pid using " + sockPath);
         console.log(e);
