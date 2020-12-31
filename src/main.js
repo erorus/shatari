@@ -346,25 +346,25 @@ async function pauseAddon(pause) {
         return;
     }
 
-    let stdout;
-    try {
-        stdout = await cp.exec('lsof -F p "' + sockPath + '"');
-    } catch (e) {
-        logMsg("Could not determine pid using " + sockPath);
-        console.log(e);
+    cp.exec('lsof -F p "' + sockPath + '"', {}, (error, stdout, stderr) => {
+        if (error) {
+            logMsg("Could not determine pid using " + sockPath);
+            console.log(error);
+            console.log(stderr);
 
-        return;
-    }
+            return;
+        }
 
-    let match = stdout.match(/p(\d+)/);
-    if (!match) {
-        logMsg("lsof did not return a pid on " + sockPath + ": " + stdout);
+        let match = stdout.match(/p(\d+)/);
+        if (!match) {
+            logMsg("lsof did not return a pid on " + sockPath + ": " + stdout);
 
-        return;
-    }
+            return;
+        }
 
-    let pid = parseInt(match[1]);
-    process.kill(pid, pause ? 'SIGSTOP' : 'SIGCONT');
+        let pid = parseInt(match[1]);
+        process.kill(pid, pause ? 'SIGSTOP' : 'SIGCONT');
+    });
 }
 
 /**
