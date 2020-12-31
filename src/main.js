@@ -2,6 +2,7 @@ const process = require('process');
 const cp = require('child_process');
 const fs = require('fs').promises;
 const Path = require('path');
+const OS = require('os');
 
 const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
@@ -283,6 +284,8 @@ function logQueueStatus() {
         realmQueue.running.length + ' realms running, ' +
         Object.keys(realmQueue.timers).length + ' realm timers waiting.'
     );
+
+    pauseAddon(realmQueue.running.length > 0);
 }
 
 /**
@@ -322,6 +325,45 @@ function nextCheckTimestamp(realmState) {
 
     // It's soon.
     return nextSnapshot + 10 * Constants.MS_SEC;
+}
+
+/**
+ * Pauses/unpauses addon data generation. If the addon is not currently being generated, nothing happens.
+ *
+ * @param {boolean} pause
+ */
+async function pauseAddon(pause) {
+    const sockPath = Path.join(OS.tmpdir(), 'addon.sock');
+    try {
+        await fs.stat(sockPath);
+    } catch (e) {
+        if (e.code !== 'ENOENT') {
+            logMsg("Could not stat " + sockPath);
+            console.log(e);
+        }
+
+        // Sock file doesn't exist, so it's not running.
+        return;
+    }
+
+    try {
+        let stdout = await cp.exec('lsof -F p "' + sockPath + '"');
+    } catch (e) {
+        logMsg("Could not determine pid using " + sockPath);
+        console.log(e);
+
+        return;
+    }
+
+    let match = stdout.match(/p(\d+)/);
+    if (!match) {
+        logMsg("lsof did not return a pid on " + sockPath + ": " + stdout);
+
+        return;
+    }
+
+    let pid = parseInt(match[1]);
+    process.kill(pid, pause ? 'SIGSTOP' : 'SIGCONT');
 }
 
 /**
