@@ -189,9 +189,7 @@ end
 
         // Interleaved list of days,price;days,price;days,price;...
         let buf = Buffer.allocUnsafe(lineBufferSize);
-
-        let priceSum = 0;
-        let priceCount = 0;
+        let regionPrices = [];
 
         let processItemInRealm = async function (connectedId, realmIndex) {
             let offset = 4 + realmIndex * (1 + 4);
@@ -227,17 +225,9 @@ end
                 return;
             }
 
-            priceList.sort((a, b) => a - b);
-            let median = priceList[Math.floor(priceList.length / 2)];
-            if (priceList.length % 2 === 0) {
-                median += priceList[priceList.length / 2 - 1];
-                median = Math.round(median / 2);
-            }
-
+            let median = getMedian(priceList);
             buf.writeUInt32BE(median, offset);
-
-            priceSum += median;
-            priceCount++;
+            regionPrices.push(median);
         }
         let promises = [];
         for (let connectedId, connectedIndex = 0; connectedId = usedConnectedIds[connectedIndex]; connectedIndex++) {
@@ -245,7 +235,8 @@ end
         }
         await Promise.all(promises);
 
-        buf.writeUInt32BE(priceSum / priceCount, 0);
+        buf.writeUInt32BE(getMedian(regionPrices), 0);
+
         if (nextLog <= Date.now()) {
             logMsg("Processed " + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
             nextLog = Date.now() + 5 * Constants.MS_SEC;
@@ -410,6 +401,17 @@ function logMsg(message) {
     const date = dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss');
 
     console.log(date + ' ' + message);
+}
+
+function getMedian(values) {
+    values.sort((a, b) => a - b);
+    let median = values[Math.floor(values.length / 2)];
+    if (values.length % 2 === 0) {
+        median += values[values.length / 2 - 1];
+        median = Math.round(median / 2);
+    }
+
+    return median;
 }
 
 main().catch(function (e) {
