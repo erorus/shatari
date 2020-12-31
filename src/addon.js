@@ -14,7 +14,7 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
 
 const api = new BNet();
-const regions = [api.REGION_US];
+const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
 const MIN_EXPANSION_ITEM_VARIATIONS = 9;
 const MEDIAN_PRICE_PERIOD = 4 * Constants.MS_DAY;
 

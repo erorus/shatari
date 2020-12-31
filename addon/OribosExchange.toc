@@ -10,5 +10,8 @@ libs\LibExtraTip\Load.xml
 dynamic\bonusToName.lua
 dynamic\speciesStats.lua
 dynamic\data.us.lua
+dynamic\data.eu.lua
+dynamic\data.tw.lua
+dynamic\data.kr.lua
 OribosExchange.lua
 
