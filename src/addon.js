@@ -46,6 +46,7 @@ async function main() {
     let promises = [];
     promises.push(generateBonusToNameId());
     promises.push(generateSpeciesStats());
+    promises.push(generateToc());
     regions.forEach(region => promises.push(processRegion(region)));
     await Promise.all(promises);
 
@@ -388,6 +389,36 @@ local addonName, addonTable = ...
 
 addonTable.speciesStats = {${statsLua}}
 `);
+    luaStream.end();
+}
+
+async function generateToc() {
+    let addonInterface = '90002';
+    let notes = dateFormat(new Date(now), 'dddd, mmmm dS, yyyy');
+    let yyyymmdd = dateFormat(new Date(now), 'yyyymmdd');
+    let dataFiles = [];
+    regions.forEach(region => dataFiles.push(`dynamic\\data.${region}.lua`));
+    dataFiles = dataFiles.join("\n");
+
+    let toc = `## Interface: ${addonInterface}
+## Title: Oribos Exchange
+## Notes: ${notes}
+## OptionalDeps: Auctionator, AuctionLite, LibExtraTip
+## SavedVariablesPerCharacter: OETooltipsHidden, OETooltipsSettings
+## Version: 1.0.${yyyymmdd}
+
+libs\\LibExtraTip\\Load.xml
+
+dynamic\\bonusToName.lua
+dynamic\\speciesStats.lua
+${dataFiles}
+
+OribosExchange.lua
+`;
+
+    const TOC_PATH = Path.resolve(__dirname, '..', 'addon', 'OribosExchange.toc');
+    let luaStream = syncFs.createWriteStream(TOC_PATH);
+    await luaStream.write(toc);
     luaStream.end();
 }
 
