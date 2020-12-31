@@ -2,5 +2,6 @@
 go.sh
 node_modules/
 
+addon/live/
 addon/dynamic/
 addon/OribosExchange.toc
