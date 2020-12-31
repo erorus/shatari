@@ -19,6 +19,7 @@ Prices are returned in copper, but accurate to the last *silver* (with coppers a
     o['itemid']         -> the ID of the item you just passed in
 
     o['species']        -> the species of the battlepet you just passed in
+    o['breed']          -> the numeric breed ID of the battlepet
     o['quality']        -> the numeric quality/rarity of the battlepet
 
     o['age']            -> number of seconds since data was compiled
@@ -43,6 +44,7 @@ This is useful for other addons (Auctioneer, TSM, etc) that have their own fancy
 local floor = math.floor
 local tinsert, tonumber = tinsert, tonumber
 local strLen, strByte, strSub = string.len, string.byte, string.sub
+local PET_CAGE = 82800
 
 local function coins(money)
     local GOLD="ffd100"
@@ -76,10 +78,36 @@ local function round(num)
     return floor(num + 0.5)
 end
 
+local function roundToOdd(value)
+    local floored = floor(value)
+    if floor((value - floored) * 1000000) == 500000 then
+        if floored % 2 == 0 then
+            return floored + 1
+        end
+
+        return floored
+    end
+
+    return floor(value + 0.5)
+end
+
 local addonName, addonTable = ...
 local prettyName = '|cFF33FF99Oribos Exchange|r'
 
-local function getSpeciesFromPetLink(link)
+local breedPoints = {
+    [3] = {0.5,0.5,0.5,["name"]="B/B"},
+    [4] = {0,2,0,["name"]="P/P"},
+    [5] = {0,0,2,["name"]="S/S"},
+    [6] = {2,0,0,["name"]="H/H"},
+    [7] = {0.9,0.9,0,["name"]="H/P"},
+    [8] = {0,0.9,0.9,["name"]="P/S"},
+    [9] = {0.9,0,0.9,["name"]="H/S"},
+    [10] = {0.4,0.9,0.4,["name"]="P/B"},
+    [11] = {0.4,0.4,0.9,["name"]="S/B"},
+    [12] = {0.9,0.4,0.4,["name"]="H/B"},
+}
+local breedCandidates = {}
+local function getBreedFromPetLink(link)
     local petString = string.match(link, "battlepet[%-?%d:]+")
     local _, speciesID, level, quality, health, power, speed = strsplit(":", petString)
 
@@ -90,7 +118,33 @@ local function getSpeciesFromPetLink(link)
     power = tonumber(power,10)
     speed = tonumber(speed,10)
 
-    return speciesID, level, quality, health, power, speed
+    local speciesStats = addonTable.speciesStats[speciesID] or addonTable.speciesStats[0]
+    local qualityFactor = level * (1 + quality / 10)
+    wipe(breedCandidates)
+
+    for breed, points in pairs(breedPoints) do
+        local breedHealth = roundToOdd((speciesStats[1] + points[1]) * 5 * qualityFactor + 100)
+        local breedPower = roundToOdd((speciesStats[2] + points[2]) * qualityFactor)
+        local breedSpeed = roundToOdd((speciesStats[3] + points[3]) * qualityFactor)
+
+        if (breedHealth == health) and (breedPower == power) and (breedSpeed == speed) then
+            tinsert(breedCandidates, breed)
+        end
+    end
+
+    local breed
+    if #breedCandidates == 1 then
+        breed = breedCandidates[1]
+    elseif #breedCandidates > 1 then
+        for i=1,#breedCandidates,1 do
+            local dataKey = PET_CAGE .. '-' .. speciesID .. '-' .. breedCandidates[i]
+            if addonTable.marketData[dataKey] then
+                breed = breedCandidates[i]
+            end
+        end
+    end
+
+    return breed, speciesID, level, quality, health, power, speed
 end
 
 local marketInfoCache, marketInfoCacheKeys, marketInfoCacheMaxDepth = {}, {}, 16
@@ -194,11 +248,11 @@ function OEMarketInfo(item,...)
     marketInfoCache[cacheKey]['__queried'] = GetTime()
 
     local _, link, dataKey
-    local iid, species, quality
+    local iid, breed, species, quality
 
     if (strfind(item, 'battlepet:')) then
-        species, _, quality = getSpeciesFromPetLink(item)
-        dataKey = '82800-'..species -- TODO: ..'-'..breed
+        breed, species, _, quality = getBreedFromPetLink(item)
+        dataKey = PET_CAGE .. '-' .. species .. '-' .. breed
     else
         local itemId, _, _, _, _, itemClass = GetItemInfoInstant(item)
         if not itemId then return tr end
@@ -249,6 +303,7 @@ function OEMarketInfo(item,...)
     end
     if (species) then
         tr['species'] = species
+        tr['breed'] = breed
         tr['quality'] = quality
     end
 
@@ -318,6 +373,15 @@ local realmName = "Realm"
 
 local function buildExtraTip(tooltip, pricingData)
     local r,g,b = .9,.8,.5
+
+    if pricingData['breed'] and breedPoints[pricingData['breed']] and qualityRGB[pricingData['quality']] then
+        LibExtraTip:AddLine(tooltip,
+            "Breed " .. breedPoints[pricingData['breed']]["name"] .. " - Species " .. pricingData['species'],
+            qualityRGB[pricingData['quality']][1],
+            qualityRGB[pricingData['quality']][2],
+            qualityRGB[pricingData['quality']][3],
+            true)
+    end
 
     LibExtraTip:AddLine(tooltip," ",r,g,b,true)
 

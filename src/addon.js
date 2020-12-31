@@ -45,6 +45,7 @@ async function main() {
 
     let promises = [];
     promises.push(generateBonusToNameId());
+    promises.push(generateSpeciesStats());
     regions.forEach(region => promises.push(processRegion(region)));
     await Promise.all(promises);
 
@@ -361,6 +362,31 @@ local function getNameId(item)
 end
 
 addonTable.getNameId = getNameId
+`);
+    luaStream.end();
+}
+
+async function generateSpeciesStats() {
+    const SPECIES_PATH = Path.resolve(__dirname, '..', 'battlepets.json');
+    const petData = JSON.parse(await fs.readFile(SPECIES_PATH));
+
+    let statsLua = ['[0]={8,8,8}'];
+    for (let speciesId in petData) {
+        if (!petData.hasOwnProperty(speciesId)) {
+            continue;
+        }
+
+        statsLua.push(`[${speciesId}]={${petData[speciesId].stamina},${petData[speciesId].power},${petData[speciesId].speed}}`);
+    }
+    statsLua = statsLua.join(',');
+
+    const luaPath = Path.resolve(__dirname, '..', 'addon', 'dynamic', 'speciesStats.lua');
+    let luaStream = syncFs.createWriteStream(luaPath);
+    await luaStream.write(Buffer.from([0xEF, 0xBB, 0xBF]));
+    await luaStream.write(`
+local addonName, addonTable = ...
+
+addonTable.speciesStats = {${statsLua}}
 `);
     luaStream.end();
 }
