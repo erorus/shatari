@@ -2,6 +2,8 @@
 go.sh
 node_modules/
 
+credentials.sh
+
 addon/live/
 addon/dynamic/
 addon/OribosExchange.toc
