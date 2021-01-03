@@ -1,3 +1,4 @@
+const axios = require('axios');
 const process = require('process');
 const fs = require('fs').promises;
 const syncFs = require('fs');
@@ -309,6 +310,20 @@ table.insert(addonTable.dataLoads, dataLoad)
     logMsg("Finished with region " + region);
 }
 
+async function fetchInterfaceVersion() {
+    const response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DeadlyBossMods/master/DBM-Core/DBM-Core.toc');
+    if (!response || response.status !== 200) {
+        return null;
+    }
+
+    const match = response.data.match(/^##\s*Interface:\s*(\d+)/i);
+    if (match) {
+        return match[1];
+    }
+
+    return null;
+}
+
 async function generateBonusToNameId() {
     const BONUSES_PATH = Path.resolve(__dirname, '..', 'bonuses.json');
     const bonusData = JSON.parse(await fs.readFile(BONUSES_PATH));
@@ -393,7 +408,7 @@ addonTable.speciesStats = {${statsLua}}
 }
 
 async function generateToc() {
-    let addonInterface = '90002';
+    let addonInterface = (await fetchInterfaceVersion()) || '90002';
     let notes = dateFormat(new Date(now), 'dddd, mmmm dS, yyyy');
     let yyyymmdd = dateFormat(new Date(now), 'yyyymmdd');
     let dataFiles = [];
