@@ -311,7 +311,14 @@ table.insert(addonTable.dataLoads, dataLoad)
 }
 
 async function fetchInterfaceVersion() {
-    const response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DeadlyBossMods/master/DBM-Core/DBM-Core.toc');
+    let response;
+    try {
+        response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DeadlyBossMods/master/DBM-Core/DBM-Core.toc');
+    } catch (e) {
+        response = null;
+        logMsg("Could not fetch interface version..");
+        console.log(e);
+    }
     if (!response || response.status !== 200) {
         return null;
     }
