@@ -126,13 +126,29 @@ async function processRegion(region) {
         for (let itemKeyString in realmState.summary) {
             let itemKey = ItemKeySerialize.parse(itemKeyString);
             if (itemKey.itemId === Constants.ITEM_PET_CAGE) {
+                // We only include full battle pet strings, not those without breeds.
                 if (itemKey.itemSuffix) {
                     knownItemKeys[itemKeyString] = true;
                 }
             } else {
                 let item = itemList[itemKey.itemId];
-                if (item && !!itemKey.itemLevel === (item.expansion >= MIN_EXPANSION_ITEM_VARIATIONS)) {
-                    knownItemKeys[itemKeyString] = true;
+                // Is this a known old item?
+                if (item && item.expansion < MIN_EXPANSION_ITEM_VARIATIONS) {
+                    // Old items never use variations in the addon. Only include this if there is no item level.
+                    if (!itemKey.itemLevel) {
+                        knownItemKeys[itemKeyString] = true;
+                    }
+                } else {
+                    // This is a newer item. Does it even use variations?
+                    if (Constants.CLASSES_EQUIPMENT.includes(item['class'])) {
+                        // It does. Only include this if there is an item level.
+                        if (itemKey.itemLevel) {
+                            knownItemKeys[itemKeyString] = true;
+                        }
+                    } else {
+                        // It doesn't use variations. Include it as-is.
+                        knownItemKeys[itemKeyString] = true;
+                    }
                 }
             }
         }
