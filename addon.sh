@@ -16,4 +16,5 @@ zip -r OribosExchange.zip OribosExchange
 advzip -z -4 OribosExchange.zip
 mv -v OribosExchange.zip live/
 
+cd ..
 node src/addon.curse.js
