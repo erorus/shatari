@@ -45,7 +45,9 @@ module.exports = function () {
 
         params = params || {};
         params.namespace = params.namespace || ('dynamic-' + region);
-        params.locale = params.locale || 'en_US';
+        if (params.locale !== null) {
+            params.locale = params.locale || 'en_US';
+        }
 
         headers = headers || {};
         const defaultHeaders = {
@@ -66,6 +68,26 @@ module.exports = function () {
             url: 'https://' + region + '.api.blizzard.com' + path,
             validateStatus: (status) => status < 400,
         });
+    };
+
+    /**
+     * Turns "enus" into "en_US"
+     *
+     * @param {string} locale
+     * @return {string}
+     */
+    this.localeBuild = function (locale) {
+        return locale.substr(0, 2) + '_' + locale.substr(2, 2).toUpperCase();
+    };
+
+    /**
+     * Turns "en_US" into "enus"
+     *
+     * @param {string} locale
+     * @return {string}
+     */
+    this.localeParse = function (locale) {
+        return locale.toLowerCase().replace(/_/g, '').substr(0, 4);
     };
 
     // ------- //

@@ -36,7 +36,7 @@ async function main() {
         throw e;
     }
 
-    let listPath = Path.resolve(__dirname, '..', 'realm-list.json');
+    let listPath = Path.resolve(__dirname, '..', 'realms', 'realm-list.json');
     realmList = JSON.parse(await fs.readFile(listPath));
     logMsg('' + Object.keys(realmList).length + ' realms in list.');
 
@@ -86,7 +86,7 @@ function getConnectedRealmsForRegion(region) {
         }
 
         let connectedRealm = result[connectedId];
-        connectedRealm.secondary.sort((a, b) => a.name.localeCompare(b.name));
+        connectedRealm.secondary.sort((a, b) => a.slug.localeCompare(b.slug));
         if (!connectedRealm.canonical) {
             connectedRealm.canonical = connectedRealm.secondary.shift();
         }
@@ -121,7 +121,7 @@ async function processRegion(region) {
         }
 
         usedRealmStates[connectedRealm.id] = realmState;
-        logMsg("Scanning " + region + " connected realm " + connectedRealm.id + " (" + connectedRealm.canonical.name + ")");
+        logMsg("Scanning " + region + " connected realm " + connectedRealm.id + " (" + connectedRealm.canonical.slug + ")");
 
         for (let itemKeyString in realmState.summary) {
             let itemKey = ItemKeySerialize.parse(itemKeyString);

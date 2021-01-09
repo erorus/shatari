@@ -26,4 +26,6 @@ module.exports = new function () {
     this.MODIFIER_TIMEWALKER_LEVEL = 9;
 
     this.ITEM_PET_CAGE = 82800;
+
+    this.LOCALES = ['enus', 'dede', 'eses', 'frfr', 'itit', 'ptbr', 'ruru', 'zhtw', 'kokr'];
 }

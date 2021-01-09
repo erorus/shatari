@@ -8,6 +8,7 @@ const RunOnce = require('./runOnce');
 
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
+const Constants = require('./constants');
 
 async function main() {
     // Run this only once.
@@ -22,7 +23,7 @@ async function main() {
         throw e;
     }
 
-    let listPath = Path.resolve(__dirname, '..', 'realm-list.json');
+    let listPath = Path.resolve(__dirname, '..', 'realms', 'realm-list.json');
     let oldList = {};
     try {
         oldList = JSON.parse(await fs.readFile(listPath));
@@ -36,16 +37,30 @@ async function main() {
 
     // Get realm list
     let realmList = await fetchRealmList();
-    for (let id in realmList) {
-        if (!realmList.hasOwnProperty(id)) {
+    for (let id in realmList.ids) {
+        if (!realmList.ids.hasOwnProperty(id)) {
             continue;
         }
-        oldList[id] = realmList[id];
+        oldList[id] = realmList.ids[id];
     }
 
-    logMsg('' + Object.keys(realmList).length + ' realms in current list.');
+    logMsg('' + Object.keys(realmList.ids).length + ' realms in current list.');
 
-    await fs.writeFile(listPath, JSON.stringify(realmList));
+    let writes = [];
+    writes.push(fs.writeFile(listPath, JSON.stringify(realmList.ids)));
+
+    for (let locale in realmList.names) {
+        if (!realmList.names.hasOwnProperty(locale)) {
+            continue;
+        }
+
+        writes.push(fs.writeFile(
+            Path.resolve(__dirname, '..', 'realms', 'realm-names.' + locale + '.json'),
+            JSON.stringify(realmList.names[locale])
+        ));
+    }
+
+    await Promise.all(writes);
 
     runOnce.finish();
 }
@@ -67,7 +82,10 @@ function logMsg(message) {
  * @return {object}
  */
 async function fetchRealmList() {
-    const result = {};
+    const result = {
+        ids: {},
+        names: {},
+    };
 
     const realmPromises = [];
     const seenConnections = {};
@@ -80,35 +98,42 @@ async function fetchRealmList() {
         response.data.connected_realms.forEach(connectedRealmRec => {
             const connectedRealmId = connectedRealmRec.href.match(/wow\/connected-realm\/(\d+)/)[1];
 
-            realmPromises.push(api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId).then(response => {
+            realmPromises.push(api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId, {locale: null}).then(response => {
                 seenConnections[connectedRealmId] = response.data.realms.length;
                 logMsg("Loaded " + region + " connected realm " + connectedRealmId + " with " + response.data.realms.length + " realms.");
 
                 response.data.realms.forEach(realmRec => {
                     const realmResult = {
                         region: region,
-                        name: realmRec.name,
                         slug: realmRec.slug,
                         id: realmRec.id,
                         connectedId: parseInt(connectedRealmId),
                     };
 
-                    if (!result.hasOwnProperty(realmResult.id)) {
-                        result[realmResult.id] = realmResult;
+                    Constants.LOCALES.forEach(locale => {
+                        result.names[locale] = result.names[locale] || {};
+                        result.names[locale][realmRec.id] = {
+                            name: realmRec.name[api.localeBuild(locale)],
+                            category: realmRec.category[api.localeBuild(locale)],
+                        };
+                    });
+
+                    if (!result.ids.hasOwnProperty(realmResult.id)) {
+                        result.ids[realmResult.id] = realmResult;
 
                         return;
                     }
 
-                    if (response.data.realms.length > seenConnections[result[realmResult.id].connectedId]) {
+                    if (response.data.realms.length > seenConnections[result.ids[realmResult.id].connectedId]) {
                         logMsg("Changing connection for realm " + realmResult.slug + " (ID " + realmResult.id + ") from " +
-                            result[realmResult.id].connectedId + " (count " + seenConnections[result[realmResult.id].connectedId] +
+                            result.ids[realmResult.id].connectedId + " (count " + seenConnections[result.ids[realmResult.id].connectedId] +
                             ") to " + realmResult.connectedId + " (count " + response.data.realms.length + ")"
                         );
 
-                        result[realmResult.id] = realmResult;
+                        result.ids[realmResult.id] = realmResult;
                     } else {
                         logMsg("Keeping connection for realm " + realmResult.slug + " (ID " + realmResult.id + ") at " +
-                            result[realmResult.id].connectedId + " (count " + seenConnections[result[realmResult.id].connectedId] +
+                            result.ids[realmResult.id].connectedId + " (count " + seenConnections[result.ids[realmResult.id].connectedId] +
                             ") and ignoring " + realmResult.connectedId + " (count " + response.data.realms.length + ")");
                     }
                 });
