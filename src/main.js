@@ -179,13 +179,13 @@ async function checkToken(region) {
             const tooOld = thisSnapshot - Constants.MAX_HISTORY;
             tokenState.snapshots = tokenState.snapshots || [];
             for (let snapshot, x = 0; snapshot = tokenState.snapshots[x]; x++) {
-                if (snapshot < tooOld || snapshot === thisSnapshot) {
+                if (snapshot[0] < tooOld || snapshot[0] === thisSnapshot) {
                     tokenState.snapshots.splice(x--, 1);
                 }
             }
             tokenState.snapshots.push([tokenState.snapshot, tokenState.price]);
             tokenState.snapshots.sort(function (a, b) {
-                return a - b;
+                return a[0] - b[0];
             });
 
             await TokenState.put(region, tokenState);
