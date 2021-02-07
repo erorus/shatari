@@ -124,6 +124,9 @@ async function processRegion(region) {
         logMsg("Scanning " + region + " connected realm " + connectedRealm.id + " (" + connectedRealm.canonical.slug + ")");
 
         for (let itemKeyString in realmState.summary) {
+            if (!realmState.summary.hasOwnProperty(itemKeyString)) {
+                continue;
+            }
             let itemKey = ItemKeySerialize.parse(itemKeyString);
             if (itemKey.itemId === Constants.ITEM_PET_CAGE) {
                 // We only include full battle pet strings, not those without breeds.
@@ -132,8 +135,12 @@ async function processRegion(region) {
                 }
             } else {
                 let item = itemList[itemKey.itemId];
+                if (!item) {
+                    logMsg("Could not identify item " + itemKey.itemId + " (" + itemKeyString + ")");
+                    continue;
+                }
                 // Is this a known old item?
-                if (item && item.expansion < MIN_EXPANSION_ITEM_VARIATIONS) {
+                if (item.expansion < MIN_EXPANSION_ITEM_VARIATIONS) {
                     // Old items never use variations in the addon. Only include this if there is no item level.
                     if (!itemKey.itemLevel) {
                         knownItemKeys[itemKeyString] = true;
