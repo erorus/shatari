@@ -8,7 +8,7 @@ source ./credentials.sh
 
 mkdir -p addon/live addon/dynamic
 
-node src/addon.js
+node --max-old-space-size=4096 src/addon.js
 
 cd addon
 rm -f OribosExchange.zip
