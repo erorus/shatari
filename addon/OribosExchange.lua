@@ -252,7 +252,7 @@ function OEMarketInfo(item,...)
 
     if (strfind(item, 'battlepet:')) then
         breed, species, _, quality = getBreedFromPetLink(item)
-        dataKey = PET_CAGE .. '-' .. species .. '-' .. breed
+        dataKey = PET_CAGE .. '-' .. (species or 0) .. '-' .. (breed or 0)
     else
         local itemId, _, _, _, _, itemClass = GetItemInfoInstant(item)
         if not itemId then return tr end
