@@ -160,7 +160,10 @@ const realmProcess = new function () {
                     if (parsed.itemSuffix || parsed.itemLevel) {
                         itemKeyString = ItemKeySerialize.stringify({
                             itemId: parsed.itemId,
-                            itemLevel: itemList[parsed.itemId]['class'] === Constants.CLASS_BATTLE_PET ? parsed.itemLevel : 0,
+                            itemLevel: (
+                                    itemList[parsed.itemId] &&
+                                    (itemList[parsed.itemId]['class'] === Constants.CLASS_BATTLE_PET)
+                                ) ? parsed.itemLevel : 0,
                             itemSuffix: 0,
                         });
                         itemKeysToUpdate[itemKeyString] = true;
