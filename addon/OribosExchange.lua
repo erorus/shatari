@@ -244,7 +244,7 @@ function OEMarketInfo(item,...)
         -- add new table to cache
         marketInfoCache[cacheKey] = {}
     end
-    table.insert(marketInfoCacheKeys, item)
+    table.insert(marketInfoCacheKeys, cacheKey)
     marketInfoCache[cacheKey]['__queried'] = GetTime()
 
     local _, link, dataKey
