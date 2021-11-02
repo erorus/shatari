@@ -336,7 +336,7 @@ table.insert(addonTable.dataLoads, dataLoad)
 async function fetchInterfaceVersion() {
     let response;
     try {
-        response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DeadlyBossMods/master/DBM-Core/DBM-Core.toc');
+        response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DBM-Retail/master/DBM-WorldEvents/DBM-WorldEvents.toc');
     } catch (e) {
         response = null;
         logMsg("Could not fetch interface version..");
