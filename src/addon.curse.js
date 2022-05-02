@@ -1,9 +1,7 @@
 const axios = require('axios');
-const cp = require('child_process');
 const dateFormat = require('dateformat');
 const fs = require('fs');
 const FormData = require('form-data');
-const net = require('net');
 const Path = require('path');
 const process = require('process');
 const StreamZip = require('node-stream-zip');
@@ -168,29 +166,24 @@ async function getLatestGameVersionIDs() {
  * @return {Promise<string|null>}
  */
 async function getNGDPVersion() {
-    return new Promise(resolve => {
-        let response = '';
+    const url = 'https://ribbit.everynothing.net/products/wow/versions';
+    let ribbitResponse;
+    try {
+        ribbitResponse = await axios.get(url);
+    } catch (e) {
+        ribbitResponse = null;
+        console.log(e);
+    }
+    if (!ribbitResponse || ribbitResponse.status !== 200) {
+        console.log("Invalid response getting game versions from ribbit!");
 
-        const client = net.createConnection({
-            host: 'ribbit.everynothing.net',
-            port: 1119
-        }, () => {
-            client.write('v1/products/wow/versions\n');
-        });
+        return '';
+    }
 
-        client.on('data', (data) => {
-            response += data.toString();
-        });
-        client.on('end', () => {
-            const match = response.match(/\n(eu\|[^\r\n]+)/);
-            const parts = (match && match[1] || '').split('|');
+    const match = ribbitResponse.data.match(/\n(eu\|[^\r\n]+)/);
+    const parts = (match && match[1] || '').split('|');
 
-            resolve(parts[5] || null);
-        });
-        client.on('error', () => {
-            resolve(null);
-        });
-    });
+    return parts[5] || null;
 }
 
 /**
