@@ -139,6 +139,10 @@ async function processRegion(region) {
                     logMsg("Could not identify item " + itemKey.itemId + " (" + itemKeyString + ")");
                     continue;
                 }
+                if (item.stack > 1) {
+                    // This is a commodity item. TODO
+                    continue;
+                }
                 // Is this a known old item?
                 if (item.expansion < MIN_EXPANSION_ITEM_VARIATIONS) {
                     // Old items never use variations in the addon. Only include this if there is no item level.
