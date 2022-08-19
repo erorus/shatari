@@ -13,6 +13,7 @@ const RealmState = require('./realmState');
 const TokenState = require('./tokenState');
 const GlobalState = require('./globalState');
 const Constants = require('./constants');
+const CommodityRealm = require('./commodityRealm');
 
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
@@ -107,6 +108,7 @@ async function main() {
     logMsg("Initializing realm timers.");
     let initPromises = [];
     realmIds.forEach(realmId => initPromises.push(initRealmCheck(realmId)));
+    CommodityRealm.getRealmIds().forEach(realmId => initPromises.push(initRealmCheck(realmId)));
     regions.forEach(region => initPromises.push(initTokenCheck(region)));
     await Promise.all(initPromises);
     initPromises = undefined;
@@ -137,7 +139,8 @@ async function main() {
 function logMsg(message, realm) {
     const date = dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss');
     if (realm) {
-        message = (realmList[realm] || 'unknown').toUpperCase() + " realm " + realm + " " + message;
+        message = (realmList[realm] || CommodityRealm.getRegionForRealm(realm) || 'unknown').toUpperCase() +
+            " realm " + realm + " " + message;
     }
 
     console.log(date + ' ' + message);
@@ -436,7 +439,7 @@ function getHttpDate(date) {
  * @param {number} connectedRealmId
  */
 async function processConnectedRealm(connectedRealmId) {
-    const region = realmList[connectedRealmId];
+    const region = realmList[connectedRealmId] || CommodityRealm.getRegionForRealm(connectedRealmId);
     if (!region) {
         throw "Could not find region for realm " + connectedRealmId;
     }
@@ -466,7 +469,7 @@ async function processConnectedRealm(connectedRealmId) {
     realmState.lastCheck = Date.now();
     let response;
     try {
-        response = await api.fetch(region, '/data/wow/connected-realm/' + connectedRealmId + '/auctions', {}, headers);
+        response = await api.fetch(region, CommodityRealm.getApiPath(connectedRealmId), {}, headers);
     } catch (e) {
         response = {status: 500};
         logMsg("Error during data fetch", connectedRealmId);
@@ -572,7 +575,7 @@ function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
         child.send({
             action: 'start',
             data: {
-                realmList: realmList,
+                region: realmList[connectedRealmId] || CommodityRealm.getRegionForRealm(connectedRealmId),
                 itemList: itemList,
                 connectedRealmId: connectedRealmId,
                 thisSnapshot: thisSnapshot,

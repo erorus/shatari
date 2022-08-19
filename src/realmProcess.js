@@ -15,7 +15,7 @@ const DATA_DIR = Constants.DATA_DIR;
 const CONCURRENT_ITEM_LIMIT = 8;
 
 let aliveness;
-let realmList = {};
+let region;
 let itemList = {};
 
 /**
@@ -28,7 +28,7 @@ function logMsg(message, realm) {
     const date = dateFormat(new Date(), 'yyyy-mm-dd HH:MM:ss');
     message = "Child " + message;
     if (realm) {
-        message = (realmList[realm] || 'unknown').toUpperCase() + " realm " + realm + " " + message;
+        message = (region || 'unknown').toUpperCase() + " realm " + realm + " " + message;
     }
 
     console.log(date + ' ' + message);
@@ -306,7 +306,7 @@ async function main () {
     process.on('message', async (m) => {
         switch (m.action) {
             case 'start':
-                realmList = m.data.realmList;
+                region = m.data.region;
                 itemList = m.data.itemList;
 
                 let result;
