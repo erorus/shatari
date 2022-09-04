@@ -296,6 +296,38 @@ const realmProcess = new function () {
             }
         }
 
+        itemState.daily = itemState.daily || [];
+        let todayTimestamp = Math.floor(itemState.snapshot / Constants.MS_DAY) * Constants.MS_DAY;
+        let todayState = [todayTimestamp, itemState.price, itemState.quantity];
+        let foundToday = false;
+        let needsSort = false;
+        for (let index = itemState.daily.length - 1; index >= 0; index--) {
+            let dayState = itemState.daily[index];
+            if (dayState[0] === todayTimestamp) {
+                foundToday = true;
+                if (dayState[2] <= todayState[2]) {
+                    // The quantity we recorded for today is less than or equal to the current quantity. Replace it.
+                    itemState.daily[index] = todayState;
+                }
+                break;
+            }
+            if (dayState[0] > todayTimestamp) {
+                // We found a day after today when scanning from the end of the list. If we need to add a row for today,
+                // we will need to re-sort the list.
+                needsSort = true;
+            }
+            if (dayState[0] < todayTimestamp - 7 * Constants.MS_DAY) {
+                // Assume data older than a week ago is in order and doesn't contain today.
+                break;
+            }
+        }
+        if (!foundToday) {
+            itemState.daily.push(todayState);
+            if (needsSort) {
+                itemState.daily.sort((a, b) => a[0] - b[0]);
+            }
+        }
+
         await ItemState.put(connectedRealmId, itemKey, itemState);
     }
 };

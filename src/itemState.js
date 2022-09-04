@@ -8,7 +8,7 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
-    const VERSION = 4;
+    const VERSION = 5;
 
     // ------ //
     // PUBLIC //
@@ -61,9 +61,13 @@ module.exports = new function () {
 
         const version = buf.readUInt8(advance(1));
         let fullModifiers = true;
+        let dailyHistory = true;
         switch (version) {
             case 3:
                 fullModifiers = false;
+                // no break
+            case 4:
+                dailyHistory = false;
                 // no break
             case VERSION:
                 // No op.
@@ -124,6 +128,17 @@ module.exports = new function () {
             ]);
         }
 
+        result.daily = [];
+        if (dailyHistory) {
+            for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
+                result.daily.push([
+                    buf.readUInt16LE(advance(2)) * Constants.MS_DAY,
+                    buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER,
+                    buf.readUInt32LE(advance(4)),
+                ]);
+            }
+        }
+
         if (cursorPosition !== buf.length) {
             throw "Read " + cursorPosition + " bytes of buffer with length " + buf.length;
         }
@@ -149,6 +164,8 @@ module.exports = new function () {
         bufferSize += 2 + (4 + 4) * (state.auctions || []).length;
         // 2 bytes for snapshot list length, then lists of snapshot+silvers+quantity
         bufferSize += 2 + (4 + 4 + 4) * (state.snapshots || []).length;
+        // 2 bytes for daily list length, then lists of day+silvers+quantity
+        bufferSize += 2 + (2 + 4 + 4) * (state.daily || []).length;
 
         // 2 bytes for specifics list length
         bufferSize += 2;
@@ -204,6 +221,14 @@ module.exports = new function () {
         buf.writeUInt16LE((state.snapshots || []).length, advance(2));
         (state.snapshots || []).forEach((snapshot) => {
             buf.writeUInt32LE(snapshot[0] / Constants.MS_SEC, advance(4));
+            buf.writeUInt32LE(snapshot[1] / Constants.COPPER_SILVER, advance(4));
+            buf.writeUInt32LE(snapshot[2], advance(4));
+        });
+
+        // Daily list
+        buf.writeUInt16LE((state.daily || []).length, advance(2));
+        (state.daily || []).forEach((snapshot) => {
+            buf.writeUInt32LE(snapshot[0] / Constants.MS_DAY, advance(2));
             buf.writeUInt32LE(snapshot[1] / Constants.COPPER_SILVER, advance(4));
             buf.writeUInt32LE(snapshot[2], advance(4));
         });
