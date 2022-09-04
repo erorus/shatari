@@ -17,6 +17,7 @@ module.exports = new function () {
     this.CLASSES_WITH_SPECIFICS = [this.CLASS_WEAPON, this.CLASS_ARMOR, this.CLASS_BATTLE_PET];
 
     this.COPPER_SILVER = 100;
+    this.COPPER_GOLD = 100 * this.COPPER_SILVER;
 
     this.MODIFIER_BATTLE_PET_QUALITY = 2; // This totally isn't what modifier 2 means, but I want to store quality and they don't have a mod for that.
     this.MODIFIER_BATTLE_PET_SPECIES = 3;

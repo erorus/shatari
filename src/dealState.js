@@ -3,27 +3,25 @@ const Path = require('path');
 const {gzip, ungzip} = require('node-gzip');
 
 const Constants = require('./constants');
-const ItemKeySerialize = require('./itemKeySerialize');
+const ItemKeySerialize = require("./itemKeySerialize");
 
 const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
-    const COPPER_SILVER = 100;
-    const MS_SEC = 1000;
-    const VERSION = 3;
+    const VERSION = 1;
 
     // ------ //
     // PUBLIC //
     // ------ //
 
     /**
-     * Reads from disk and returns the local state object for the given connected realm.
+     * Reads from disk and returns the local state object for the given region's deals.
      *
-     * @param {number} connectedRealmId
+     * @param {string} region
      * @return {object}
      */
-    this.get = async function (connectedRealmId) {
-        const path = getPath(connectedRealmId);
+    this.get = async function (region) {
+        const path = getPath(region);
         let compressed;
         try {
             compressed = await fs.readFile(path);
@@ -39,7 +37,7 @@ module.exports = new function () {
         try {
             buf = await ungzip(compressed);
         } catch (e) {
-            console.log("Realm " + connectedRealmId + " Error unzipping realm state");
+            console.log("Deals region " + region + " error unzipping");
             console.log(e);
 
             return {};
@@ -56,20 +54,15 @@ module.exports = new function () {
         const version = buf.readUInt8(advance(1));
         switch (version) {
             case VERSION:
-                // no op
+                // No op.
                 break;
             default:
                 throw "Unsupported version: " + version;
         }
 
         const result = {};
-        result.snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
-        result.lastCheck = buf.readUInt32LE(advance(4)) * MS_SEC;
-        result.snapshots = [];
-        for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
-            result.snapshots.push(buf.readUInt32LE(advance(4)) * MS_SEC);
-        }
-        result.summary = {};
+
+        result.items = {};
         for (let remaining = buf.readUInt32LE(advance(4)); remaining > 0; remaining--) {
             let itemKey = {
                 itemId: buf.readUInt32LE(advance(4)),
@@ -77,10 +70,9 @@ module.exports = new function () {
                 itemSuffix: buf.readUInt16LE(advance(2)),
             };
             let itemKeyString = ItemKeySerialize.stringify(itemKey);
-            let snapshot = buf.readUInt32LE(advance(4)) * MS_SEC;
-            let price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;
-            let quantity = buf.readUInt32LE(advance(4));
-            result.summary[itemKeyString] = [snapshot, price, quantity];
+            let median = buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER;
+            let dealPrice = buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER;
+            result.items[itemKeyString] = [median, dealPrice];
         }
 
         if (cursorPosition !== buf.length) {
@@ -91,24 +83,18 @@ module.exports = new function () {
     }
 
     /**
-     * Writes to disk the given state for the given connected realm.
+     * Writes to disk the given state for the given region's token.
      *
-     * @param {number} connectedRealmId
+     * @param {string} region
      * @param {object} state
      */
-    this.put = async function (connectedRealmId, state) {
-        const path = getPath(connectedRealmId);
+    this.put = async function (region, state) {
+        const path = getPath(region);
 
         // Start off with version number in front.
         let bufferSize = 1;
-        // 4 bytes for snapshot timestamp
-        bufferSize += 4;
-        // 4 bytes for last check timestamp
-        bufferSize += 4;
-        // 2 bytes for snapshot list length, then the snapshot list
-        bufferSize += 2 + 4 * (state.snapshots || []).length;
-        // 4 bytes for summary list length, then lists of id+level+suffix+snapshot+silvers+quantity
-        bufferSize += 4 + (4 + 2 + 2 + 4 + 4 + 4) * Object.keys(state.summary || {}).length;
+        // 4 bytes for items list length, then lists of id+level+suffix+median+deal
+        bufferSize += 4 + (4 + 2 + 2 + 4 + 4) * Object.keys(state.items || {}).length;
 
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
@@ -122,21 +108,11 @@ module.exports = new function () {
         // Version
         buf.writeUInt8(VERSION, advance(1));
 
-        // Snapshot
-        buf.writeUInt32LE((state.snapshot || 0) / MS_SEC, advance(4));
-
-        // Last Check
-        buf.writeUInt32LE((state.lastCheck || 0) / MS_SEC, advance(4));
-
-        // List of snapshots
-        buf.writeUInt16LE((state.snapshots || []).length, advance(2));
-        (state.snapshots || []).forEach((snapshot) => buf.writeUInt32LE(snapshot / MS_SEC, advance(4)));
-
-        // Summary list
-        let summary = state.summary || {};
-        buf.writeUInt32LE(Object.keys(summary).length, advance(4));
-        for (let itemKeyString in summary) {
-            if (!summary.hasOwnProperty(itemKeyString)) {
+        // Items list
+        let items = state.items || {};
+        buf.writeUInt32LE(Object.keys(items).length, advance(4));
+        for (let itemKeyString in items) {
+            if (!items.hasOwnProperty(itemKeyString)) {
                 continue;
             }
             let itemKey = ItemKeySerialize.parse(itemKeyString);
@@ -144,9 +120,8 @@ module.exports = new function () {
             buf.writeUInt32LE(itemKey.itemId, advance(4));
             buf.writeUInt16LE(itemKey.itemLevel, advance(2));
             buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
-            buf.writeUInt32LE(summary[itemKeyString][0] / MS_SEC, advance(4));
-            buf.writeUInt32LE(summary[itemKeyString][1] / COPPER_SILVER, advance(4));
-            buf.writeUInt32LE(summary[itemKeyString][2], advance(4));
+            buf.writeUInt32LE(items[itemKeyString][0] / Constants.COPPER_SILVER, advance(4));
+            buf.writeUInt32LE(items[itemKeyString][1] / Constants.COPPER_SILVER, advance(4));
         }
 
         if (cursorPosition !== bufferSize) {
@@ -176,12 +151,12 @@ module.exports = new function () {
     // ------- //
 
     /**
-     * Returns the filesystem path to the connected realm's state file.
+     * Returns the filesystem path to the region's token state file.
      *
-     * @param {number} connectedRealmId
+     * @param {string} region
      * @return {string}
      */
-    function getPath(connectedRealmId) {
-        return Path.resolve(DATA_DIR, '' + connectedRealmId, 'state.bin');
+    function getPath(region) {
+        return Path.resolve(DATA_DIR, 'global', 'deals-' + region + '.bin');
     }
 };

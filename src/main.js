@@ -7,6 +7,8 @@ const OS = require('os');
 const Aliveness = require('./aliveness');
 const BNet = require('./battlenet');
 const dateFormat = require('dateformat');
+const DealState = require('./dealState');
+const ItemKeySerialize = require('./itemKeySerialize');
 const Runner = require('./runner');
 const RunOnce = require('./runOnce');
 const RealmState = require('./realmState');
@@ -37,12 +39,22 @@ const realmQueue = {
 };
 
 async function main() {
+    aliveness = new Aliveness(MAX_ALIVENESS_DELAY);
+
+    if ((process.argv[2] || '') === 'deals') {
+        await initLists();
+        await updateDeals(process.argv[3] || 'us');
+
+        return;
+    }
+
     // Run this only once.
     let runOnce = new RunOnce('shatari');
     try {
         await runOnce.start();
     } catch (e) {
         if (e === 'Already running') {
+            aliveness.close();
             return;
         }
 
@@ -55,7 +67,6 @@ async function main() {
         logMsg("Over time limit");
         process.exit();
     }, MAX_RUN_TIME + 5 * Constants.MS_MINUTE);
-    aliveness = new Aliveness(MAX_ALIVENESS_DELAY);
 
     const clearRealmTimers = () => {
         for (let k in realmQueue.timers) {
@@ -82,16 +93,8 @@ async function main() {
         logMsg("Empty event loop, exiting..");
     });
 
-    // Get item list
-    {
-        let listPath = Path.resolve(__dirname, '..', 'items.json');
-        let listJson = await fs.readFile(listPath);
-        itemList = JSON.parse(listJson);
-    }
+    await initLists();
 
-    // Get realm list
-    realmList = await fetchRealmList();
-    //realmList = {54: 'us'};
     const realmIds = Object.keys(realmList).map(id => parseInt(id));
     if (!realmIds.length) {
         logMsg("No realms in list?!");
@@ -128,6 +131,22 @@ async function main() {
     aliveness.close();
     runOnce.finish();
     clearTimeout(lastTimeout);
+}
+
+/**
+ * Initializes our global list variables.
+ *
+ * @return {Promise<void>}
+ */
+async function initLists() {
+    // Get item list
+    let listPath = Path.resolve(__dirname, '..', 'items.json');
+    let listJson = await fs.readFile(listPath);
+    itemList = JSON.parse(listJson);
+
+    // Get realm list
+    realmList = await fetchRealmList();
+    //realmList = {54: 'us'};
 }
 
 /**
@@ -229,6 +248,87 @@ function setPendingTokenTimer(region, tokenState) {
         delete realmQueue.timers[timerKey];
         checkToken(region);
     }, delay);
+}
+
+//             //
+// Deals Lists //
+//             //
+
+/**
+ * Update the deals data for the given region.
+ *
+ * @param {string} region
+ * @returns {Promise<void>}
+ */
+async function updateDeals(region) {
+    logMsg(region + " region: updating deals.");
+    let realmIds = Object.keys(realmList).filter(realmId => realmList[realmId] === region).map(id => parseInt(id));
+
+    let allPrices = {};
+    let offeredPrices = {};
+
+    const getMedian = values => {
+        if (values.length % 2 === 1) {
+            return values[Math.floor(values.length / 2)];
+        } else {
+            let value1 = values[values.length / 2 - 1];
+            let value2 = values[values.length / 2];
+            return Math.round((value1 + value2) / 2);
+        }
+    };
+
+    while (realmIds.length) {
+        aliveness.checkIn();
+        let realmId = realmIds.pop();
+        let realmState = await RealmState.get(realmId);
+        if (!realmState || !realmState.summary) {
+            continue;
+        }
+        Object.keys(realmState.summary).forEach(itemKey => {
+            let parsedKey = ItemKeySerialize.parse(itemKey);
+            let item = itemList[parsedKey.itemId];
+            if (!item || item.stack > 1) {
+                return;
+            }
+
+            let price = realmState.summary[itemKey][1];
+            let quantity = realmState.summary[itemKey][2];
+
+            if (price > 0) {
+                allPrices[itemKey] = allPrices[itemKey] || [];
+                allPrices[itemKey].push(price);
+                if (quantity > 0) {
+                    offeredPrices[itemKey] = offeredPrices[itemKey] || [];
+                    offeredPrices[itemKey].push(price);
+                }
+            }
+        });
+        realmState = null;
+    }
+
+    aliveness.checkIn();
+    let state = {
+        items: {},
+    };
+    Object.keys(allPrices).forEach(itemKey => {
+        allPrices[itemKey].sort();
+        let median = getMedian(allPrices[itemKey]);
+        if (median < 150 * Constants.COPPER_GOLD) {
+            return;
+        }
+
+        let offered = offeredPrices[itemKey] || [];
+        let dealPrice = median;
+        if (offered.length >= 15) {
+            offered.sort();
+            dealPrice = Math.min(dealPrice, offered[Math.floor(offered.length / 3)]);
+        }
+
+        state.items[itemKey] = [median, dealPrice];
+    });
+
+    DealState.put(region, state);
+    logMsg(`${region} region: finished updating deals for ${Object.keys(state.items).length} items.`);
 }
 
 //             //
