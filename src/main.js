@@ -325,7 +325,7 @@ async function updateDeals(region) {
         items: {},
     };
     Object.keys(allPrices).forEach(itemKey => {
-        allPrices[itemKey].sort();
+        allPrices[itemKey].sort((a, b) => a - b);
         let median = getMedian(allPrices[itemKey]);
         if (median < 150 * Constants.COPPER_GOLD) {
             return;
@@ -334,7 +334,7 @@ async function updateDeals(region) {
         let offered = offeredPrices[itemKey] || [];
         let dealPrice = median;
         if (offered.length >= 15) {
-            offered.sort();
+            offered.sort((a, b) => a - b);
             dealPrice = Math.min(dealPrice, offered[Math.floor(offered.length / 3)]);
         }
 
