@@ -45,6 +45,8 @@ async function main() {
         await initLists();
         await updateDeals(process.argv[3] || 'us');
 
+        aliveness.close();
+
         return;
     }
 
