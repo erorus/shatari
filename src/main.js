@@ -22,6 +22,7 @@ const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
 
 const CONCURRENT_REALM_LIMIT = 4;
 
+const DEALS_INTERVAL = 30 * Constants.MS_MINUTE;
 const MAX_ALIVENESS_DELAY = 10 * Constants.MS_MINUTE;
 const MAX_RUN_TIME = 6 * Constants.MS_HOUR;
 const MAX_SNAPSHOT_INTERVAL = 2 * Constants.MS_HOUR;
@@ -31,6 +32,8 @@ const TOKEN_INTERVAL = 20 * Constants.MS_MINUTE + 10 * Constants.MS_SEC;
 let aliveness;
 let realmList = {};
 let itemList = {};
+let dealsLastRun = {};
+let dealsRunning = false;
 
 const realmQueue = {
     pending: [],
@@ -123,6 +126,12 @@ async function main() {
     while (!abortLoop && Date.now() < endTime) {
         await checkPendingRealms();
         if (!abortLoop) {
+            if (!dealsRunning) {
+                let region = regions.find(region => (dealsLastRun[region] || 0) + DEALS_INTERVAL < Date.now());
+                if (region) {
+                    updateDeals(region);
+                }
+            }
             await (new Promise(resolve => setTimeout(resolve, 3 * Constants.MS_SEC)));
         }
     }
@@ -263,6 +272,9 @@ function setPendingTokenTimer(region, tokenState) {
  * @returns {Promise<void>}
  */
 async function updateDeals(region) {
+    dealsLastRun[region] = Date.now();
+    dealsRunning = true;
+
     logMsg(region + " region: updating deals.");
     let realmIds = Object.keys(realmList).filter(realmId => realmList[realmId] === region).map(id => parseInt(id));
 
@@ -330,6 +342,8 @@ async function updateDeals(region) {
     });
 
     DealState.put(region, state);
+    dealsLastRun[region] = Date.now();
+    dealsRunning = false;
     logMsg(`${region} region: finished updating deals for ${Object.keys(state.items).length} items.`);
 }
 
