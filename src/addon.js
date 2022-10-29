@@ -13,6 +13,7 @@ const RealmState = require('./realmState');
 const Constants = require('./constants');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
+const CommodityRealm = require('./commodityRealm');
 
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
@@ -140,7 +141,7 @@ async function processRegion(region) {
                     continue;
                 }
                 if (item.stack > 1) {
-                    // This is a commodity item. TODO
+                    // This is a commodity item.
                     continue;
                 }
                 // Is this a known old item?
@@ -165,6 +166,36 @@ async function processRegion(region) {
         }
     }
 
+    let usedConnectedIds = Object.keys(usedRealmStates);
+    usedConnectedIds.sort((a, b) => parseInt(a) - parseInt(b));
+    let realmCount = usedConnectedIds.length;
+
+    let commodityRealmId = CommodityRealm.getRealmForRegion(region);
+    if (!commodityRealmId) {
+        logMsg(`Could not determine commodity realm for region ${region}!`);
+    } else {
+        let realmState = await RealmState.get(commodityRealmId);
+        usedRealmStates[commodityRealmId] = realmState;
+        logMsg(`Scanning ${region} commodity realm ${commodityRealmId}`);
+        Object.keys(realmState.summary).forEach(itemKeyString => {
+            let itemKey = ItemKeySerialize.parse(itemKeyString);
+            if (itemKey.itemId === Constants.ITEM_PET_CAGE) {
+                return;
+            }
+
+            let item = itemList[itemKey.itemId];
+            if (!item) {
+                logMsg(`Could not identify item ${itemKey.itemId} (${itemKeyString})`);
+                return;
+            }
+            if (item.stack <= 1) {
+                logMsg(`Skipping non-commodity item ${itemKey.itemId} (${itemKeyString}) (${item.stack} stack) in commodity realm.`);
+                return;
+            }
+            knownItemKeys[itemKeyString] = true;
+        });
+    }
+
     knownItemKeys = Object.keys(knownItemKeys);
     knownItemKeys.sort((a, b) => {
         let aKey = ItemKeySerialize.parse(a);
@@ -172,11 +203,7 @@ async function processRegion(region) {
 
         return (aKey.itemId - bKey.itemId) || (aKey.itemLevel - bKey.itemLevel) || (aKey.itemSuffix - bKey.itemSuffix);
     });
-    logMsg("Found " + knownItemKeys.length + " distinct item keys in region " + region);
-
-    let usedConnectedIds = Object.keys(usedRealmStates);
-    usedConnectedIds.sort((a, b) => parseInt(a) - parseInt(b));
-    let realmCount = usedConnectedIds.length;
+    logMsg(`Found ${knownItemKeys.length} distinct item keys in region ${region}`);
 
     let guidLua = [];
     for (let realmIndex = 0; realmIndex < realmCount; realmIndex++) {
@@ -217,10 +244,12 @@ end
         if (!item) {
             return;
         }
+        let isCommodity = item.stack > 1;
+        let itemRealmCount = isCommodity ? 1 : realmCount;
 
         let regionPrices = [];
-        let realmDays = new Uint8Array(realmCount);
-        let realmPrices = new Uint32Array(realmCount);
+        let realmDays = new Uint8Array(itemRealmCount);
+        let realmPrices = new Uint32Array(itemRealmCount);
 
         let processItemInRealm = async function (connectedId, realmIndex) {
             let summaryData = usedRealmStates[connectedId].summary[itemKeyString];
@@ -253,15 +282,19 @@ end
             realmPrices[realmIndex] = median;
             regionPrices.push(median);
         }
-        let promises = [];
-        for (let connectedId, connectedIndex = 0; connectedId = usedConnectedIds[connectedIndex]; connectedIndex++) {
-            promises.push(processItemInRealm(connectedId, connectedIndex));
+        if (isCommodity) {
+            await processItemInRealm(commodityRealmId, 0);
+        } else {
+            let promises = [];
+            for (let connectedId, connectedIndex = 0; connectedId = usedConnectedIds[connectedIndex]; connectedIndex++) {
+                promises.push(processItemInRealm(connectedId, connectedIndex));
+            }
+            await Promise.all(promises);
         }
-        await Promise.all(promises);
 
         // Scan all the prices to find the minimum required number of bytes.
         let priceSize = 1;
-        for (let priceIndex = 0; (priceSize < 4) && (priceIndex < realmCount); priceIndex++) {
+        for (let priceIndex = 0; (priceSize < 4) && (priceIndex < itemRealmCount); priceIndex++) {
             while (realmPrices[priceIndex] >= (1 << (priceSize * 8))) {
                 if (++priceSize >= 4) {
                     break;
@@ -269,16 +302,26 @@ end
             }
         }
 
-        let lineBufferSize = 1 + priceSize * (realmCount + 1) + 1 * realmCount;
-        // Interleaved list of days,price;days,price;days,price;...
-        let buf = Buffer.allocUnsafe(lineBufferSize);
-        buf.writeUInt8(priceSize, 0);
-        buf.writeUIntBE(getMedian(regionPrices), 1, priceSize);
-        let offset = 1 + priceSize;
-        for (let index = 0; index < realmCount; index++) {
-            buf.writeUInt8(realmDays[index], offset++);
-            buf.writeUIntBE(realmPrices[index], offset, priceSize);
-            offset += priceSize;
+        let buf;
+        if (isCommodity) {
+            // price size, region price, region days
+            let lineBufferSize = 1 + priceSize + 1;
+            buf = Buffer.allocUnsafe(lineBufferSize);
+            buf.writeUInt8(priceSize, 0);
+            buf.writeUIntBE(realmPrices[0], 1, priceSize);
+            buf.writeUInt8(realmDays[0], 1 + priceSize);
+        } else {
+            // price size, region median, realm 0 days, realm 0 price, realm 1 days, realm 1 price, ...
+            let lineBufferSize = 1 + priceSize * (itemRealmCount + 1) + 1 * itemRealmCount;
+            buf = Buffer.allocUnsafe(lineBufferSize);
+            buf.writeUInt8(priceSize, 0);
+            buf.writeUIntBE(getMedian(regionPrices), 1, priceSize);
+            let offset = 1 + priceSize;
+            for (let index = 0; index < itemRealmCount; index++) {
+                buf.writeUInt8(realmDays[index], offset++);
+                buf.writeUIntBE(realmPrices[index], offset, priceSize);
+                offset += priceSize;
+            }
         }
 
         if (luaLines === 0) {
@@ -286,11 +329,19 @@ end
             await luaStream.write(`dataFuncs[${dataFuncIndex}] = function()\nlocal md = addonTable.marketData\n`);
         }
 
-        await luaStream.write(Buffer.concat([
-            Buffer.from(`md['${itemKeyString}']=crop(${priceSize},`),
-            luaQuote(buf),
-            Buffer.from(')\n'),
-        ]));
+        if (isCommodity) {
+            await luaStream.write(Buffer.concat([
+                Buffer.from(`md['${itemKeyString}']=`),
+                luaQuote(buf),
+                Buffer.from('\n'),
+            ]));
+        } else {
+            await luaStream.write(Buffer.concat([
+                Buffer.from(`md['${itemKeyString}']=crop(${priceSize},`),
+                luaQuote(buf),
+                Buffer.from(')\n'),
+            ]));
+        }
 
         if (++luaLines >= 2000) {
             await luaStream.write('end\n');
