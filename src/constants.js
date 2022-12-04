@@ -13,8 +13,9 @@ module.exports = new function () {
     this.CLASS_WEAPON = 2;
     this.CLASS_ARMOR = 4;
     this.CLASS_BATTLE_PET = 17;
-    this.CLASSES_EQUIPMENT = [this.CLASS_WEAPON, this.CLASS_ARMOR];
-    this.CLASSES_WITH_SPECIFICS = [this.CLASS_WEAPON, this.CLASS_ARMOR, this.CLASS_BATTLE_PET];
+    this.CLASS_PROFESSION = 19;
+    this.CLASSES_EQUIPMENT = [this.CLASS_WEAPON, this.CLASS_ARMOR, this.CLASS_PROFESSION];
+    this.CLASSES_WITH_SPECIFICS = [this.CLASS_WEAPON, this.CLASS_ARMOR, this.CLASS_BATTLE_PET, this.CLASS_PROFESSION];
 
     this.COPPER_SILVER = 100;
     this.COPPER_GOLD = 100 * this.COPPER_SILVER;
