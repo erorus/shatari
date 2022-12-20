@@ -49,8 +49,10 @@ async function main() {
     promises.push(generateBonusToNameId());
     promises.push(generateSpeciesStats());
     promises.push(generateToc());
-    regions.forEach(region => promises.push(processRegion(region)));
     await Promise.all(promises);
+    for (let region, regionIndex = 0; region = regions[regionIndex]; regionIndex++) {
+        await processRegion(region);
+    }
 
     runOnce.finish();
 }
@@ -349,7 +351,7 @@ end
         }
 
         if (nextLog <= Date.now()) {
-            logMsg("Processed " + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
+            logMsg(`${region} Processed ` + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
             nextLog = Date.now() + 5 * Constants.MS_SEC;
         }
     }
