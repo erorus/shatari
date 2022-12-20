@@ -20,7 +20,7 @@ wago_upload () {
 
 mkdir -p addon/live addon/dynamic
 
-node --max-old-space-size=4096 src/addon.js
+node --max-old-space-size=5120 src/addon.js
 
 cd addon
 rm -f OribosExchange.zip
