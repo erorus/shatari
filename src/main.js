@@ -313,6 +313,7 @@ async function updateDeals(region) {
             if (price > 0 &&                                       // Item must have a price on this realm.
                 !parsedKey.itemSuffix &&                           // Item must not have a suffix/breed.
                 item && item.quality > 0 &&                        // Item quality must be better than poor.
+                (item.stack > 1) === isCommodityRealm &&           // Commodity items must come from commodity realms.
                 (parsedKey.itemId === Constants.ITEM_PET_CAGE ||   // Pet cages are allowed. Level is species, there.
                     (!parsedKey.itemLevel ||                       // Item must not have a level, or if it does,
                         item.expansion >= currentExpansion         // The item must be from this expansion.
