@@ -298,6 +298,7 @@ async function updateDeals(region) {
     while (realmIds.length) {
         aliveness.checkIn();
         let realmId = realmIds.pop();
+        logMsg(`${region} region: getting deals prices for realm ${realmId}.`);
         let realmState = await RealmState.get(realmId);
         if (!realmState || !realmState.summary) {
             continue;
