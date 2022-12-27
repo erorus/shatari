@@ -32,6 +32,7 @@ const TOKEN_INTERVAL = 20 * Constants.MS_MINUTE + 10 * Constants.MS_SEC;
 let aliveness;
 let realmList = {};
 let itemList = {};
+let currentExpansion;
 let dealsLastRun = {};
 let dealsRunning = false;
 
@@ -154,6 +155,7 @@ async function initLists() {
     let listPath = Path.resolve(__dirname, '..', 'items.json');
     let listJson = await fs.readFile(listPath);
     itemList = JSON.parse(listJson);
+    Object.values(itemList).forEach(item => currentExpansion = Math.max(currentExpansion || 0, item.expansion || 0));
 
     // Get realm list
     realmList = await fetchRealmList();
@@ -275,11 +277,13 @@ async function updateDeals(region) {
     dealsLastRun[region] = Date.now();
     dealsRunning = true;
 
-    logMsg(region + " region: updating deals.");
+    logMsg(region + " region: starting deals.");
     let realmIds = Object.keys(realmList).filter(realmId => realmList[realmId] === region).map(id => parseInt(id));
+    realmIds.push(CommodityRealm.getRealmForRegion(region));
 
-    let allPrices = {};
-    let offeredPrices = {};
+    let csvPrices = {};       // Prices for items qualifying for the csv output.
+    let seenPrices = {};      // Every above-0 price we encounter for 1-stack items.
+    let availablePrices = {}; // Every above-0 price we encounter for 1-stack items currently for sale.
 
     const getMedian = values => {
         if (values.length % 2 === 1) {
@@ -298,40 +302,97 @@ async function updateDeals(region) {
         if (!realmState || !realmState.summary) {
             continue;
         }
+        let isCommodityRealm = CommodityRealm.isCommodityRealm(realmId);
         Object.keys(realmState.summary).forEach(itemKey => {
+            let price = realmState.summary[itemKey][1];
+            let quantity = realmState.summary[itemKey][2];
             let parsedKey = ItemKeySerialize.parse(itemKey);
             let item = itemList[parsedKey.itemId];
-            if (!item || item.stack > 1) {
+
+            if (price > 0 &&                                       // Item must have a price on this realm.
+                !parsedKey.itemSuffix &&                           // Item must not have a suffix/breed.
+                item && item.quality > 0 &&                        // Item quality must be better than poor.
+                (parsedKey.itemId === Constants.ITEM_PET_CAGE ||   // Pet cages are allowed. Level is species, there.
+                    (!parsedKey.itemLevel ||                       // Item must not have a level, or if it does,
+                        item.expansion >= currentExpansion         // The item must be from this expansion.
+                    )
+                )
+            ) {
+                csvPrices[itemKey] = csvPrices[itemKey] || [];
+                csvPrices[itemKey].push(price);
+            }
+
+            // Only unstackable items are valid for deals, since stackable items are cross-realm anyway.
+            if (isCommodityRealm || !item || item.stack > 1) {
                 return;
             }
 
-            let price = realmState.summary[itemKey][1];
-            let quantity = realmState.summary[itemKey][2];
-
             if (price > 0) {
-                allPrices[itemKey] = allPrices[itemKey] || [];
-                allPrices[itemKey].push(price);
+                seenPrices[itemKey] = seenPrices[itemKey] || [];
+                seenPrices[itemKey].push(price);
                 if (quantity > 0) {
-                    offeredPrices[itemKey] = offeredPrices[itemKey] || [];
-                    offeredPrices[itemKey].push(price);
+                    availablePrices[itemKey] = availablePrices[itemKey] || [];
+                    availablePrices[itemKey].push(price);
                 }
             }
         });
         realmState = null;
+    }
+    logMsg(`${region} region: deals data collected for ${Object.keys(csvPrices).length} CSV items, ${Object.keys(seenPrices).length} deals items.`);
+
+    // CSV stuff
+    {
+        aliveness.checkIn();
+        let csvData = ['item', 'level', 'species', 'price'].join(',') + '\n';
+        Object.keys(csvPrices).forEach(itemKey => {
+            csvPrices[itemKey].sort((a, b) => a - b);
+            let median = getMedian(csvPrices[itemKey]);
+            let parsedKey = ItemKeySerialize.parse(itemKey);
+            if (parsedKey.itemId === Constants.ITEM_PET_CAGE) {
+                csvData += [
+                    parsedKey.itemId,
+                    '',                   // level
+                    parsedKey.itemLevel,  // species
+                    median,
+                ].join(',') + '\n';
+            } else {
+                csvData += [
+                    parsedKey.itemId,
+                    parsedKey.itemLevel || '',
+                    '', // species
+                    median,
+                ].join(',') + '\n';
+            }
+        });
+        csvPrices = {};
+        let path = Path.resolve(Constants.DATA_DIR, 'csv', `region.csv`);
+        try {
+            await fs.writeFile(path, csvData);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                const parent = Path.dirname(path);
+
+                await fs.mkdir(parent, {recursive: true});
+                await fs.writeFile(path, csvData);
+            } else {
+                throw error;
+            }
+        }
+        logMsg(`${region} region: CSV region file updated.`);
     }
 
     aliveness.checkIn();
     let state = {
         items: {},
     };
-    Object.keys(allPrices).forEach(itemKey => {
-        allPrices[itemKey].sort((a, b) => a - b);
-        let median = getMedian(allPrices[itemKey]);
+    Object.keys(seenPrices).forEach(itemKey => {
+        seenPrices[itemKey].sort((a, b) => a - b);
+        let median = getMedian(seenPrices[itemKey]);
         if (median < 150 * Constants.COPPER_GOLD) {
             return;
         }
 
-        let offered = offeredPrices[itemKey] || [];
+        let offered = availablePrices[itemKey] || [];
         let dealPrice = median;
         if (offered.length >= 15) {
             offered.sort((a, b) => a - b);
