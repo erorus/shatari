@@ -366,7 +366,7 @@ async function updateDeals(region) {
             }
         });
         csvPrices = {};
-        let path = Path.resolve(Constants.DATA_DIR, 'csv', `region.csv`);
+        let path = Path.resolve(Constants.DATA_DIR, 'global', `${region}.csv`);
         try {
             await fs.writeFile(path, csvData);
         } catch (error) {
