@@ -277,7 +277,7 @@ async function updateDeals(region) {
     dealsLastRun[region] = Date.now();
     dealsRunning = true;
 
-    logMsg(region + " region: starting deals.");
+    logMsg(region + " deals: starting.");
     let realmIds = Object.keys(realmList).filter(realmId => realmList[realmId] === region).map(id => parseInt(id));
     realmIds.push(CommodityRealm.getRealmForRegion(region));
 
@@ -298,7 +298,7 @@ async function updateDeals(region) {
     while (realmIds.length) {
         aliveness.checkIn();
         let realmId = realmIds.pop();
-        logMsg(`${region} region: getting deals prices for realm ${realmId}.`);
+        logMsg(`${region} deals: getting prices for realm ${realmId}.`);
         let realmState = await RealmState.get(realmId);
         if (!realmState || !realmState.summary) {
             continue;
@@ -339,7 +339,7 @@ async function updateDeals(region) {
         });
         realmState = null;
     }
-    logMsg(`${region} region: deals data collected for ${Object.keys(csvPrices).length} CSV items, ${Object.keys(seenPrices).length} deals items.`);
+    logMsg(`${region} deals: data collected for ${Object.keys(csvPrices).length} CSV items, ${Object.keys(seenPrices).length} deals items.`);
 
     // CSV stuff
     {
@@ -379,7 +379,7 @@ async function updateDeals(region) {
                 throw error;
             }
         }
-        logMsg(`${region} region: CSV region file updated.`);
+        logMsg(`${region} deals: CSV region file updated.`);
     }
 
     aliveness.checkIn();
@@ -406,7 +406,7 @@ async function updateDeals(region) {
     DealState.put(region, state);
     dealsLastRun[region] = Date.now();
     dealsRunning = false;
-    logMsg(`${region} region: finished updating deals for ${Object.keys(state.items).length} items.`);
+    logMsg(`${region} deals: finished updating deals for ${Object.keys(state.items).length} items.`);
 }
 
 //             //
