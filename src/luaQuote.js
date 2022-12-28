@@ -4,7 +4,9 @@ const replacements = {
     '\026': Buffer.from('\'\\026\''),
 };
 
-const concat = Buffer.from('..');
+const comma = Buffer.from(',');
+const strConcatStart = Buffer.from('scc(');
+const strConcatEnd = Buffer.from(')');
 
 /**
  * Wrap a buffer with lua brackets.
@@ -74,8 +76,10 @@ function luaQuote(buf) {
         parts.push(luaBracket(buf.slice(bufStart)));
     }
     for (let x = 1; x < parts.length; x += 2) {
-        parts.splice(x, 0, concat);
+        parts.splice(x, 0, comma);
     }
+    parts.unshift(strConcatStart);
+    parts.push(strConcatEnd);
 
     return Buffer.concat(parts);
 }

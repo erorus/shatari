@@ -226,6 +226,7 @@ local realmIndex
 local dataFuncs = {}
 
 local loc_substr = string.sub
+local scc = strconcat
 
 local function crop(priceSize, b)
     local headerSize = 1 + priceSize
