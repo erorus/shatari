@@ -20,6 +20,10 @@ wago_upload () {
 
 mkdir -p addon/live addon/dynamic
 
+if [ "$1" != "" ]; then
+  echo "Will not upload zip to addon sites!"
+fi
+
 node --max-old-space-size=5120 src/addon.js
 
 cd addon
@@ -27,6 +31,10 @@ rm -f OribosExchange.zip
 zip -r OribosExchange.zip OribosExchange
 advzip -z -4 OribosExchange.zip
 mv -v OribosExchange.zip live/
+
+if [ "$1" != "" ]; then
+  exit
+fi
 
 cd ..
 node src/addon.curse.js
