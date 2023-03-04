@@ -83,7 +83,7 @@ module.exports = new function () {
     }
 
     /**
-     * Writes to disk the given state for the given region's token.
+     * Writes to disk the given state for the given region's deals.
      *
      * @param {string} region
      * @param {object} state
@@ -151,7 +151,7 @@ module.exports = new function () {
     // ------- //
 
     /**
-     * Returns the filesystem path to the region's token state file.
+     * Returns the filesystem path to the region's deal state file.
      *
      * @param {string} region
      * @return {string}
