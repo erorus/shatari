@@ -12,6 +12,7 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const Runner = require('./runner');
 const RunOnce = require('./runOnce');
 const RealmState = require('./realmState');
+const RegionState = require('./regionState');
 const TokenState = require('./tokenState');
 const GlobalState = require('./globalState');
 const Constants = require('./constants');
@@ -384,30 +385,40 @@ async function updateDeals(region) {
     }
 
     aliveness.checkIn();
-    let state = {
+    let dealState = {
+        items: {},
+    };
+    let regionState = {
         items: {},
     };
     Object.keys(seenPrices).forEach(itemKey => {
+        let offered = availablePrices[itemKey] || [];
+        if (offered.length) {
+            offered.sort((a, b) => a - b);
+            regionState.items[itemKey] = getMedian(offered);
+        }
+
         seenPrices[itemKey].sort((a, b) => a - b);
         let median = getMedian(seenPrices[itemKey]);
         if (median < 150 * Constants.COPPER_GOLD) {
             return;
         }
 
-        let offered = availablePrices[itemKey] || [];
         let dealPrice = median;
         if (offered.length >= 15) {
-            offered.sort((a, b) => a - b);
             dealPrice = Math.min(dealPrice, offered[Math.floor(offered.length / 3)]);
         }
 
-        state.items[itemKey] = [median, dealPrice];
+        dealState.items[itemKey] = [median, dealPrice];
     });
 
-    DealState.put(region, state);
+    await Promise.all([
+        DealState.put(region, dealState),
+        RegionState.put(region, regionState),
+    ]);
     dealsLastRun[region] = Date.now();
     dealsRunning = false;
-    logMsg(`${region} deals: finished updating deals for ${Object.keys(state.items).length} items.`);
+    logMsg(`${region} deals: finished updating deals for ${Object.keys(dealState.items).length} items.`);
 }
 
 //             //
