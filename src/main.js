@@ -306,8 +306,9 @@ async function updateDeals(region) {
         }
         let isCommodityRealm = CommodityRealm.isCommodityRealm(realmId);
         Object.keys(realmState.summary).forEach(itemKey => {
+            let itemSnapshot = realmState.summary[itemKey][0];
             let price = realmState.summary[itemKey][1];
-            let quantity = realmState.summary[itemKey][2];
+            let quantity = itemSnapshot === realmState.snapshot ? realmState.summary[itemKey][2] : 0;
             let parsedKey = ItemKeySerialize.parse(itemKey);
             let item = itemList[parsedKey.itemId];
 
