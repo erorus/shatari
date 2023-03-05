@@ -63,15 +63,17 @@ module.exports = new function () {
         const result = {};
 
         result.items = {};
+        let prevItemId = 0;
         for (let remaining = buf.readUInt32LE(advance(4)); remaining > 0; remaining--) {
             let itemKey = {
-                itemId: buf.readUInt32LE(advance(4)),
+                itemId: prevItemId + buf.readUInt16LE(advance(2)),
                 itemLevel: buf.readUInt16LE(advance(2)),
                 itemSuffix: buf.readUInt16LE(advance(2)),
             };
             let itemKeyString = ItemKeySerialize.stringify(itemKey);
             let median = buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER;
             result.items[itemKeyString] = median;
+            prevItemId = itemKey.itemId;
         }
 
         if (cursorPosition !== buf.length) {
@@ -93,7 +95,7 @@ module.exports = new function () {
         // Start off with version number in front.
         let bufferSize = 1;
         // 4 bytes for items list length, then lists of id+level+suffix+median
-        bufferSize += 4 + (4 + 2 + 2 + 4) * Object.keys(state.items || {}).length;
+        bufferSize += 4 + (2 + 2 + 2 + 4) * Object.keys(state.items || {}).length;
 
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
@@ -109,18 +111,20 @@ module.exports = new function () {
 
         // Items list
         let items = state.items || {};
-        buf.writeUInt32LE(Object.keys(items).length, advance(4));
-        for (let itemKeyString in items) {
-            if (!items.hasOwnProperty(itemKeyString)) {
-                continue;
-            }
+        let keyStrings = Object.keys(items);
+        buf.writeUInt32LE(keyStrings.length, advance(4));
+        keyStrings.sort((a, b) => ItemKeySerialize.parse(a).itemId - ItemKeySerialize.parse(b).itemId);
+        let prevItemId = 0;
+        keyStrings.forEach(itemKeyString => {
             let itemKey = ItemKeySerialize.parse(itemKeyString);
 
-            buf.writeUInt32LE(itemKey.itemId, advance(4));
+            buf.writeUInt16LE(itemKey.itemId - prevItemId, advance(2));
             buf.writeUInt16LE(itemKey.itemLevel, advance(2));
             buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
             buf.writeUInt32LE(items[itemKeyString] / Constants.COPPER_SILVER, advance(4));
-        }
+
+            prevItemId = itemKey.itemId;
+        });
 
         if (cursorPosition !== bufferSize) {
             throw "Wrote " + cursorPosition + " bytes into a buffer of size " + bufferSize;
