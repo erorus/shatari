@@ -10,6 +10,10 @@ const DATA_DIR = Constants.DATA_DIR;
 module.exports = new function () {
     const VERSION = 1;
 
+    // These bits are set on the item ID field when these other fields are present.
+    const FLAG_ITEM_LEVEL  = 0x40000000;
+    const FLAG_ITEM_SUFFIX = 0x80000000;
+
     // ------ //
     // PUBLIC //
     // ------ //
@@ -66,9 +70,17 @@ module.exports = new function () {
         for (let remaining = buf.readUInt32LE(advance(4)); remaining > 0; remaining--) {
             let itemKey = {
                 itemId: buf.readUInt32LE(advance(4)),
-                itemLevel: buf.readUInt16LE(advance(2)),
-                itemSuffix: buf.readUInt16LE(advance(2)),
+                itemLevel: 0,
+                itemSuffix: 0,
             };
+            if (itemKey.itemId & FLAG_ITEM_LEVEL) {
+                itemKey.itemId &= ~FLAG_ITEM_LEVEL;
+                itemKey.itemLevel = buf.readUInt16LE(advance(2));
+            }
+            if (itemKey.itemId & FLAG_ITEM_SUFFIX) {
+                itemKey.itemId &= ~FLAG_ITEM_SUFFIX;
+                itemKey.itemSuffix = buf.readUInt16LE(advance(2));
+            }
             let itemKeyString = ItemKeySerialize.stringify(itemKey);
             let median = buf.readUInt32LE(advance(4)) * Constants.COPPER_SILVER;
             result.items[itemKeyString] = median;
@@ -116,17 +128,32 @@ module.exports = new function () {
             }
             let itemKey = ItemKeySerialize.parse(itemKeyString);
 
-            buf.writeUInt32LE(itemKey.itemId, advance(4));
-            buf.writeUInt16LE(itemKey.itemLevel, advance(2));
-            buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
+            let itemId = itemKey.itemId;
+            if (itemKey.itemLevel) {
+                itemId |= FLAG_ITEM_LEVEL;
+            }
+            if (itemKey.itemSuffix) {
+                itemId |= FLAG_ITEM_SUFFIX;
+            }
+            if (itemId < 0) {
+                // Thanks, JS bitwise operators.
+                itemId += 0x100000000;
+            }
+
+            buf.writeUInt32LE(itemId, advance(4));
+            if (itemId & FLAG_ITEM_LEVEL) {
+                buf.writeUInt16LE(itemKey.itemLevel, advance(2));
+            }
+            if (itemId & FLAG_ITEM_SUFFIX) {
+                buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
+            }
             buf.writeUInt32LE(items[itemKeyString] / Constants.COPPER_SILVER, advance(4));
         }
 
-        if (cursorPosition !== bufferSize) {
-            throw "Wrote " + cursorPosition + " bytes into a buffer of size " + bufferSize;
-        }
+        const trimmedBuf = Buffer.allocUnsafe(cursorPosition);
+        buf.copy(trimmedBuf, 0, 0, cursorPosition);
 
-        const compressed = await gzip(buf);
+        const compressed = await gzip(trimmedBuf);
 
         try {
             await fs.writeFile(path, compressed);
