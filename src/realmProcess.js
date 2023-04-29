@@ -61,7 +61,7 @@ const realmProcess = new function () {
             pet_species_id: Constants.MODIFIER_BATTLE_PET_SPECIES,
         };
 
-        data.auctions.forEach(function (auction) {
+        (data.auctions || []).forEach(function (auction) {
             const itemId = auction.item.id;
             const itemData = itemList[itemId];
             if (!itemData) {
