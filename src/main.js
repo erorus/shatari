@@ -751,7 +751,7 @@ function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
 
         child.on('message', m => {
             if (m.action === 'finish') {
-                logMsg("Received " + Object.keys(m.data).length + " items back from child", connectedRealmId);
+                logMsg("Received " + Object.keys(m.data.stats || {}).length + " items back from child", connectedRealmId);
                 resolve(m.data);
             } else if (m.action === 'error') {
                 logMsg("Child reported some error", connectedRealmId);
