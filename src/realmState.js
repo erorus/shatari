@@ -10,7 +10,7 @@ const DATA_DIR = Constants.DATA_DIR;
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
-    const VERSION = 3;
+    const VERSION = 4;
 
     // ------ //
     // PUBLIC //
@@ -53,8 +53,12 @@ module.exports = new function () {
             return res;
         };
 
+        let hasBonusStatItems = true;
         const version = buf.readUInt8(advance(1));
         switch (version) {
+            case 3:
+                hasBonusStatItems = false;
+                break;
             case VERSION:
                 // no op
                 break;
@@ -81,6 +85,21 @@ module.exports = new function () {
             let price = buf.readUInt32LE(advance(4)) * COPPER_SILVER;
             let quantity = buf.readUInt32LE(advance(4));
             result.summary[itemKeyString] = [snapshot, price, quantity];
+        }
+        result.bonusStatItems = {};
+        if (hasBonusStatItems) {
+            for (let statCount = buf.readUInt8(advance(1)); statCount > 0; statCount--) {
+                const statId = buf.readUInt8(advance(1));
+                result.bonusStatItems[statId] = [];
+                for (let keyCount = buf.readUInt16LE(advance(2)); keyCount > 0; keyCount--) {
+                    const itemKey = {
+                        itemId: buf.readUInt32LE(advance(4)),
+                        itemLevel: buf.readUInt16LE(advance(2)),
+                        itemSuffix: buf.readUInt16LE(advance(2)),
+                    };
+                    result.bonusStatItems[statId].push(ItemKeySerialize.stringify(itemKey));
+                }
+            }
         }
 
         if (cursorPosition !== buf.length) {
@@ -109,6 +128,10 @@ module.exports = new function () {
         bufferSize += 2 + 4 * (state.snapshots || []).length;
         // 4 bytes for summary list length, then lists of id+level+suffix+snapshot+silvers+quantity
         bufferSize += 4 + (4 + 2 + 2 + 4 + 4 + 4) * Object.keys(state.summary || {}).length;
+        // 1 byte for the bonus stat count, then 1 byte for the bonus stat id and 2 bytes for the item count
+        bufferSize += 1 + (1 + 2) * Object.keys(state.bonusStatItems || {}).length;
+        // The length of each bonus stat item list, comprised of id+level+suffix.
+        Object.values(state.bonusStatItems || {}).forEach(itemList => bufferSize += itemList.length * (4 + 2 + 2));
 
         const buf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
@@ -147,6 +170,24 @@ module.exports = new function () {
             buf.writeUInt32LE(summary[itemKeyString][0] / MS_SEC, advance(4));
             buf.writeUInt32LE(summary[itemKeyString][1] / COPPER_SILVER, advance(4));
             buf.writeUInt32LE(summary[itemKeyString][2], advance(4));
+        }
+
+        // Bonus stat items
+        let bonusStatItems = state.bonusStatItems || {};
+        buf.writeUInt8(Object.keys(bonusStatItems).length, advance(1));
+        for (let bonusStatString in bonusStatItems) {
+            if (!bonusStatItems.hasOwnProperty(bonusStatString)) {
+                continue;
+            }
+            buf.writeUInt8(parseInt(bonusStatString), advance(1));
+            buf.writeUInt16LE(bonusStatItems[bonusStatString].length, advance(2));
+            bonusStatItems[bonusStatString].forEach(itemKeyString => {
+                let itemKey = ItemKeySerialize.parse(itemKeyString);
+
+                buf.writeUInt32LE(itemKey.itemId, advance(4));
+                buf.writeUInt16LE(itemKey.itemLevel, advance(2));
+                buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
+            });
         }
 
         if (cursorPosition !== bufferSize) {

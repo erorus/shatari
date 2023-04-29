@@ -674,8 +674,11 @@ async function processConnectedRealm(connectedRealmId) {
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
         let items;
+        let bonusStatItems;
         try {
-            items = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
+            const results = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
+            items = results.stats;
+            bonusStatItems = results.bonusStatItems;
         } catch (error) {
             delete realmState.locked;
             await RealmState.put(connectedRealmId, realmState);
@@ -706,6 +709,8 @@ async function processConnectedRealm(connectedRealmId) {
         realmState.snapshots.sort(function (a, b) {
             return a - b;
         });
+
+        realmState.bonusStatItems = bonusStatItems;
 
         await GlobalState.lock();
         const globalState = await GlobalState.get();

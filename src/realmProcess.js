@@ -49,6 +49,7 @@ const realmProcess = new function () {
         tooOld = thisSnapshot - Constants.MAX_HISTORY;
 
         const stats = {};
+        const bonusStatItems = {};
 
         const priorAuctions = await getPriorAuctionList(connectedRealmId);
         const currentAuctions = {};
@@ -141,6 +142,9 @@ const realmProcess = new function () {
                     }
                 }
                 item.specifics.push(spec);
+
+                ItemKey.getBonusStats(auction.item)
+                    .forEach(statId => bonusStatItems[statId] = (bonusStatItems[statId] || new Set()).add(itemKeyFull));
             }
 
             currentAuctions[auctionKey] = auctionListItemKey;
@@ -204,8 +208,14 @@ const realmProcess = new function () {
         await Promise.all(running);
 
         //logMsg("returning " + Object.keys(stats).length + " results", connectedRealmId);
+        const results = {
+            stats: stats,
+            bonusStatItems: {},
+        };
+        Object.keys(bonusStatItems)
+            .forEach(statKey => results.bonusStatItems[statKey] = Array.from(bonusStatItems[statKey].values()));
 
-        return stats;
+        return results;
     }
 
     /**

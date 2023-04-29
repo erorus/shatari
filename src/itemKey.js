@@ -106,7 +106,25 @@ module.exports = new function () {
         }
 
         return result;
-    }
+    };
+
+    /**
+     * Given an auction's item object, return the IDs of the tracked bonus tertiary stats which it has.
+     *
+     * @param {AuctionItem} auctionItem
+     * @return {number[]}
+     */
+    this.getBonusStats = function (auctionItem) {
+        if (!auctionItem.bonus_lists) {
+            return [];
+        }
+
+        const statBonuses = bonusData.statBonuses || {};
+
+        return Object.keys(statBonuses)
+            .filter(statKey => statBonuses[statKey].some(bonusId => auctionItem.bonus_lists.includes(bonusId)))
+            .map(statKey => parseInt(statKey));
+    };
 
     function getCurvePoint(curveId, x) {
         let curve = bonusData.curvePoints[curveId];
