@@ -496,7 +496,7 @@ addonTable.speciesStats = {${statsLua}}
 }
 
 async function generateToc() {
-    let addonInterface = (await fetchInterfaceVersion()) || '90002';
+    let addonInterface = (await fetchInterfaceVersion()) || '100100';
     let notes = dateFormat(new Date(now), 'dddd, mmmm dS, yyyy');
     let yyyymmdd = dateFormat(new Date(now), 'yyyymmdd');
     let dataFiles = [];
