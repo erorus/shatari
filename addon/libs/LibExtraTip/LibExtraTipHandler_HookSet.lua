@@ -655,7 +655,7 @@ local function GenerateTooltipMethodTable()
 			additional.highBidder = hb
 			additional.owner = own
 			additional.ownerFull = ownf
-			additinal.link = GetAuctionItemLink(type,index)
+			additional.link = GetAuctionItemLink(type,index)
 		end
 		tooltipMethodPosthooks.SetAuctionItem = posthookClearIgnore
 

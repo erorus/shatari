@@ -637,7 +637,7 @@ local function GenerateTDPHooks()
 		OnCleared(tooltip)
 		local additional = reg.additional
 
-		local info = tooltip.info
+		local info = tooltip:GetPrimaryTooltipInfo()
 		if info then -- ### todo: is it actually possible for this to be nil here?
 			-- getterName has just been called (with getterArgs) and the result is in data
 			-- getterArgs may be a table containing a list of args, or it may be nil
@@ -693,7 +693,7 @@ local function GenerateTDPHooks()
 		OnCleared(tooltip)
 		local additional = reg.additional
 
-		local info = tooltip.info
+		local info = tooltip:GetPrimaryTooltipInfo()
 		if info then -- ### todo: is it actually possible for this to be nil here?
 			-- getterName has just been called (with getterArgs) and the result is in data
 			-- getterArgs may be a table containing a list of args, or it may be nil
@@ -734,7 +734,7 @@ local function GenerateTDPHooks()
 		OnCleared(tooltip)
 		local additional = reg.additional
 
-		local info = tooltip.info
+		local info = tooltip:GetPrimaryTooltipInfo()
 		if info then -- ### todo: is it actually possible for this to be nil here?
 			-- getterName has just been called (with getterArgs) and the result is in data
 			-- getterArgs may be a table containing a list of args, or it may be nil

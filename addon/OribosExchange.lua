@@ -478,8 +478,8 @@ local function onEvent(self,event,arg)
             if not tooltipsEnabled then
                 print(prettyName .. " - Tooltip prices disabled. Run |cFFFFFF78/oetooltip on|r to enable.")
             end
-            LibExtraTip:AddCallback({type = "item", callback = onTooltipSetItem, allevents = true})
-            LibExtraTip:AddCallback({type = "battlepet", callback = onTooltipSetItem, allevents = true})
+            LibExtraTip:AddCallback({type = "item", callback = onTooltipSetItem})
+            LibExtraTip:AddCallback({type = "battlepet", callback = onTooltipSetItem})
             LibExtraTip:RegisterTooltip(GameTooltip)
             LibExtraTip:RegisterTooltip(ItemRefTooltip)
             LibExtraTip:RegisterTooltip(BattlePetTooltip)
