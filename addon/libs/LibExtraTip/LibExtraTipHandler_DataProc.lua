@@ -36,7 +36,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 Only one of the LibExtraTipHandler files will load, depending on which API is supported by the client
 Each LibExtraTipHandler file exports the following functions:
 
-private.RegisterTooltipHandler(tooltip, reg, specialTooltip)
+private.RegisterTooltipHandler(tooltip, reg)
 private.startup.ActivateHandler(startup)
 private.DeactivateHandler()
 
@@ -773,7 +773,24 @@ end
 
 -- Export functions
 
-function private.RegisterTooltipHandler(tooltip, reg, specialTooltip)
+function private.RegisterTooltipHandler(tooltip, reg)
+	local specialTooltip
+
+	if tooltip:GetObjectType() ~= "GameTooltip" then
+		if tooltip:GetObjectType() == "Frame" then
+			-- is it a BattlePetTooltip? check for some of the entries from BattlePetTooltipTemplate
+			if tooltip.BattlePet and tooltip.PetType and tooltip.PetTypeTexture then
+				specialTooltip = "battlepet"
+			else
+				return nil, "Invalid Tooltip Frame"
+			end
+		else
+			return nil, "Invalid Tooltip Object"
+		end
+	elseif not tooltip.GetPrimaryTooltipInfo then
+		return nil, "Invalid Tooltip API"
+	end
+
 	if specialTooltip == "battlepet" then
 		reg.NoColumns = true -- This is not a GameTooltip so it has no Text columns. Cannot support certain functions such as embedding
 		private.HookScriptSecure(tooltip,"OnHide", private.OnCleared)
@@ -788,6 +805,8 @@ function private.RegisterTooltipHandler(tooltip, reg, specialTooltip)
 		private.HookScriptSecure(tooltip,"OnSizeChanged", private.OnResize)
 		private.HookMethodSecure(tooltip,"Show", private.OnShowCalled)
 	end
+
+	return true
 end
 
 function private.startup.ActivateHandler(startup)
@@ -829,4 +848,4 @@ if status.filetrackerHandler == LOAD_START then
 	status.filetrackerHandler = LOAD_COMPLETE
 end
 
-LibStub("LibRevision"):Set("$URL$","$Rev$","10.02.DEV.", 'auctioneer', 'libs')
+LibStub("LibRevision"):Set("$URL$","$Rev$","10.03.DEV.", 'auctioneer', 'libs')

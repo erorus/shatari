@@ -59,7 +59,7 @@ local DEACTIVATED = 99			-- set during Deactivate for each file
 if status.filetrackerMain ~= LOAD_NEW then return end
 status.filetrackerMain = LOAD_START
 
-LibStub("LibRevision"):Set("$URL$","$Rev$","10.02.DEV.", 'auctioneer', 'libs')
+LibStub("LibRevision"):Set("$URL$","$Rev$","10.03.DEV.", 'auctioneer', 'libs')
 
 -- A string unique to this version to prevent frame name conflicts.
 local LIBSTRING = versions.LIBNAME.."_"..versions.MAJOR.."_"..versions.MINOR
@@ -556,42 +556,28 @@ end
 	Adds the provided tooltip to the list of tooltips to monitor for items.
 	@param tooltip GameTooltip object
 	@return true if tooltip is registered
+	@return true, true if tooltip was registered by this call
+	@return nil, errortext if tooltip could not be registered
 	@since 1.0
 ]]
 function lib:RegisterTooltip(tooltip)
-	local specialTooltip
-
 	if not lib:IsActive() then
 		return nil, "Library Inactive"
 	end
 
 	if not tooltip or type(tooltip) ~= "table" or type(tooltip.GetObjectType) ~= "function" then
-		return nil, "Invalid Tooltip"
+		return nil, "Invalid Tooltip Parameter"
 	end
-	if tooltip:GetObjectType() ~= "GameTooltip" then
-		if tooltip:GetObjectType() == "Frame" then
-			-- is it a BattlePetTooltip? check for some of the entries from BattlePetTooltipTemplate
-			if tooltip.BattlePet and tooltip.PetType and tooltip.PetTypeTexture then
-				specialTooltip = "battlepet"
-			else
-				return nil, "Invalid Tooltip"
-			end
-		else
-			return nil, "Invalid Tooltip"
-		end
-	end
-
-	-- if not self.tooltipRegistry then
-		-- self.tooltipRegistry = {}
-		-- self:GenerateTooltipMethodTable()
-	-- end
 
 	if not self.tooltipRegistry[tooltip] then
 		local reg = {}
+		local success, text = private.RegisterTooltipHandler(tooltip, reg)
+		if not success then
+			return nil, text or "Unknown"
+		end
 		self.tooltipRegistry[tooltip] = reg
 		reg.additional = {}
 
-		private.RegisterTooltipHandler(tooltip, reg, specialTooltip)
 
 		return true, true
 	end

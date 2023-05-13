@@ -33,14 +33,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 --]]
 
 -- First thing: look for the API used by the other handler and exit immediately if it is found
--- If this API does not exist we shall assume the APIs needed by this file do exist
+-- If this API does not exist we shall mostly assume the APIs needed by this file do exist
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then return end
 
 --[[
 Only one of the LibExtraTipHandler files will load, depending on which API is supported by the client
 Each LibExtraTipHandler file exports the following functions:
 
-private.RegisterTooltipHandler(tooltip, reg, specialTooltip)
+private.RegisterTooltipHandler(tooltip, reg)
 private.startup.ActivateHandler(startup)
 private.DeactivateHandler()
 
@@ -853,30 +853,29 @@ We could use these to recreate tooltip:GetItem etc. if they are missing, when we
 --]]
 
 
-function private.RegisterTooltipHandler(tooltip, reg, specialTooltip)
-	if specialTooltip == "battlepet" then -- Will not occur in Classic Era or Wrath; code retained just in case Battlepets get ported to Classic at some point
-		reg.NoColumns = true -- This is not a GameTooltip so it has no Text columns. Cannot support certain functions such as embedding
-		private.HookScriptBasic(tooltip,"OnHide", private.OnCleared)
-		private.HookScriptBasic(tooltip,"OnSizeChanged", private.OnResize)
-		if not status.firstPetTooltip then -- only hook for first BattlePet tooltip
-			private.HookGlobalSecure("BattlePetTooltipTemplate_SetBattlePet", private.OnSetBattlePet)
-			status.firstPetTooltip = true
-		end
-	else
-		private.HookScriptBasic(tooltip,"OnTooltipSetItem", HandlerItem)
-		private.HookScriptBasic(tooltip,"OnTooltipSetUnit", HandlerUnit)
-		private.HookScriptBasic(tooltip,"OnTooltipSetSpell", HandlerSpell)
-		private.HookScriptBasic(tooltip,"OnTooltipCleared", private.OnCleared)
-		private.HookScriptBasic(tooltip,"OnSizeChanged", private.OnResize)
-		private.HookMethodSecure(tooltip,"Show", private.OnShowCalled)
-
-		for k,v in pairs(tooltipMethodPrehooks) do
-			private.HookMethod(tooltip,k,v)
-		end
-		for k,v in pairs(tooltipMethodPosthooks) do
-			private.HookMethod(tooltip,k,nil,v)
-		end
+function private.RegisterTooltipHandler(tooltip, reg)
+	-- Note: test for BattlePetTooltip has been removed from this handler; Neither Classic Era nor Classic Wrath support battlepets
+	if tooltip:GetObjectType() ~= "GameTooltip" then
+		return nil, "Invalid Tooltip Object"
+	elseif not tooltip:HasScript("OnTooltipSetItem") then
+		return nil, "Invalid Tooltip API"
 	end
+
+	private.HookScriptBasic(tooltip,"OnTooltipSetItem", HandlerItem)
+	private.HookScriptBasic(tooltip,"OnTooltipSetUnit", HandlerUnit)
+	private.HookScriptBasic(tooltip,"OnTooltipSetSpell", HandlerSpell)
+	private.HookScriptBasic(tooltip,"OnTooltipCleared", private.OnCleared)
+	private.HookScriptBasic(tooltip,"OnSizeChanged", private.OnResize)
+	private.HookMethodSecure(tooltip,"Show", private.OnShowCalled)
+
+	for k,v in pairs(tooltipMethodPrehooks) do
+		private.HookMethod(tooltip,k,v)
+	end
+	for k,v in pairs(tooltipMethodPosthooks) do
+		private.HookMethod(tooltip,k,nil,v)
+	end
+
+	return true
 end
 
 function private.startup.ActivateHandler(startup)
@@ -918,4 +917,4 @@ if status.filetrackerHandler == LOAD_START then
 	status.filetrackerHandler = LOAD_COMPLETE
 end
 
-LibStub("LibRevision"):Set("$URL$","$Rev$","10.02.DEV.", 'auctioneer', 'libs')
+LibStub("LibRevision"):Set("$URL$","$Rev$","10.03.DEV.", 'auctioneer', 'libs')
