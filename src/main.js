@@ -305,7 +305,7 @@ async function updateBoundItems() {
     }
 
     aliveness.checkIn();
-    boundItems = Array.from(boundItems.values()).sort((a, b) => a - b);
+    boundItems = Array.from(boundItems.values()).sort((a, b) => a - b).map(n => `${n}`);
     logMsg(`bound items: found ${boundItems.length} bound items in region states.`);
 
     let listJson = JSON.stringify(boundItems);
