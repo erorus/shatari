@@ -24,6 +24,7 @@ const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
 const CONCURRENT_REALM_LIMIT = 4;
 
 const DEALS_INTERVAL = 30 * Constants.MS_MINUTE;
+const BOUND_ITEMS_INTERVAL = 2 * Constants.MS_HOUR;
 const MAX_ALIVENESS_DELAY = 10 * Constants.MS_MINUTE;
 const MAX_RUN_TIME = 6 * Constants.MS_HOUR;
 const MAX_SNAPSHOT_INTERVAL = 2 * Constants.MS_HOUR;
@@ -36,6 +37,7 @@ let itemList = {};
 let currentExpansion;
 let dealsLastRun = {};
 let dealsRunning = false;
+let boundItemsLastChecked;
 
 const realmQueue = {
     pending: [],
@@ -132,6 +134,11 @@ async function main() {
                 let region = regions.find(region => (dealsLastRun[region] || 0) + DEALS_INTERVAL < Date.now());
                 if (region) {
                     updateDeals(region);
+                }
+            }
+            if (!dealsRunning) {
+                if ((boundItemsLastChecked || 0) + BOUND_ITEMS_INTERVAL < Date.now()) {
+                    updateBoundItems();
                 }
             }
             await (new Promise(resolve => setTimeout(resolve, 3 * Constants.MS_SEC)));
@@ -267,6 +274,59 @@ function setPendingTokenTimer(region, tokenState) {
 //             //
 // Deals Lists //
 //             //
+
+/**
+ * Writes a list of IDs of all bound items mentioned in each region.
+ *
+ * @returns {Promise<void>}
+ */
+async function updateBoundItems() {
+    boundItemsLastChecked = Date.now();
+    logMsg('bound items: starting.');
+
+    let boundItems = new Set();
+
+    let regionsLeft = regions.slice();
+    while (regionsLeft.length) {
+        aliveness.checkIn();
+        let region = regionsLeft.shift();
+        logMsg(`bound items: getting ${region} region state.`);
+        let regionState = await RegionState.get(region);
+        if (!regionState || !regionState.items) {
+            continue;
+        }
+        Object.keys(regionState.items).forEach(itemKey => {
+            let parsedKey = ItemKeySerialize.parse(itemKey);
+            let item = itemList[parsedKey.itemId];
+            if (item?.bop) {
+                boundItems.add(parsedKey.itemId);
+            }
+        });
+    }
+
+    aliveness.checkIn();
+    boundItems = Array.from(boundItems.values()).sort((a, b) => a - b);
+    logMsg(`bound items: found ${boundItems.length} bound items in region states.`);
+
+    let listJson = JSON.stringify(boundItems);
+    let path = Path.resolve(Constants.DATA_DIR, `ids.bound.json`);
+    try {
+        await fs.writeFile(path, listJson);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            const parent = Path.dirname(path);
+
+            await fs.mkdir(parent, {recursive: true});
+            await fs.writeFile(path, listJson);
+        } else {
+            throw error;
+        }
+    }
+    logMsg(`bound items: ids.bound.json file updated.`);
+
+    boundItemsLastChecked = Date.now();
+    logMsg('bound items: finished.');
+}
 
 /**
  * Update the deals data for the given region.
