@@ -309,7 +309,7 @@ async function updateBoundItems() {
     logMsg(`bound items: found ${boundItems.length} bound items in region states.`);
 
     let listJson = JSON.stringify(boundItems);
-    let path = Path.resolve(Constants.DATA_DIR, `ids.bound.json`);
+    let path = Path.resolve(__dirname, '..', 'ids.bound.json');
     try {
         await fs.writeFile(path, listJson);
     } catch (error) {
