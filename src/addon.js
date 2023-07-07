@@ -41,7 +41,7 @@ async function main() {
     realmList = JSON.parse(await fs.readFile(listPath));
     logMsg('' + Object.keys(realmList).length + ' realms in list.');
 
-    listPath = Path.resolve(__dirname, '..', 'items.json');
+    listPath = Path.resolve(__dirname, '..', 'items.all.json');
     itemList = JSON.parse(await fs.readFile(listPath));
     logMsg('' + Object.keys(itemList).length + ' items in list.');
 

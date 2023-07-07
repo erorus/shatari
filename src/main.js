@@ -153,7 +153,7 @@ async function main() {
  */
 async function initLists() {
     // Get item list
-    let listPath = Path.resolve(__dirname, '..', 'items.json');
+    let listPath = Path.resolve(__dirname, '..', 'items.all.json');
     let listJson = await fs.readFile(listPath);
     itemList = JSON.parse(listJson);
     Object.values(itemList).forEach(item => currentExpansion = Math.max(currentExpansion || 0, item.expansion || 0));

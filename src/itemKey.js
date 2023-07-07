@@ -3,7 +3,7 @@ const Path = require('path');
 const Constants = require('./constants');
 
 const BONUSES_PATH = Path.resolve(__dirname, '..', 'bonuses.json');
-const ITEMS_PATH = Path.resolve(__dirname, '..', 'items.json');
+const ITEMS_PATH = Path.resolve(__dirname, '..', 'items.all.json');
 
 module.exports = new function () {
     const bonusData = JSON.parse(fs.readFileSync(BONUSES_PATH));
