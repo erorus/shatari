@@ -49,7 +49,7 @@ local tooltipsSettings = {}
 
 local function coins(money)
     if tooltipsSettings['coins'] then
-        return GetCoinTextureString(money)
+        return GetMoneyString(money, true)
     end
 
     local GOLD="ffd100"
