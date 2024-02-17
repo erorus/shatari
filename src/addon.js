@@ -394,7 +394,7 @@ table.insert(addonTable.dataLoads, dataLoad)
 async function fetchInterfaceVersion() {
     let response;
     try {
-        response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DBM-Retail/master/DBM-WorldEvents/DBM-WorldEvents.toc');
+        response = await axios.get('https://raw.githubusercontent.com/DeadlyBossMods/DBM-Unified/master/DBM-Core/DBM-Core.toc');
     } catch (e) {
         response = null;
         logMsg("Could not fetch interface version..");
@@ -496,7 +496,7 @@ addonTable.speciesStats = {${statsLua}}
 }
 
 async function generateToc() {
-    let addonInterface = (await fetchInterfaceVersion()) || '100100';
+    let addonInterface = (await fetchInterfaceVersion()) || '100205';
     let notes = dateFormat(new Date(now), 'dddd, mmmm dS, yyyy');
     let yyyymmdd = dateFormat(new Date(now), 'yyyymmdd');
     let dataFiles = [];
