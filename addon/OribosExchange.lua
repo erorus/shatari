@@ -1,6 +1,6 @@
 --[[
 
-Oribos Exchange addon, v 0.1
+Oribos Exchange addon, v 1.1
 https://oribos.exchange/
 
 You should be able to query this DB from other addons:
@@ -45,8 +45,13 @@ local floor = math.floor
 local tinsert, tonumber = tinsert, tonumber
 local strLen, strByte, strSub = string.len, string.byte, string.sub
 local PET_CAGE = 82800
+local tooltipsSettings = {}
 
 local function coins(money)
+    if tooltipsSettings['coins'] then
+        return GetCoinTextureString(money)
+    end
+
     local GOLD="ffd100"
     local SILVER="e6e6e6"
     local COPPER="c8602c"
@@ -352,8 +357,6 @@ function OETooltip(...)
     return tooltipsEnabled
 end
 
-local tooltipsSettings = {}
-
 local qualityRGB = {
     [0] = {0.616,0.616,0.616},
     [1] = {1,1,1},
@@ -422,6 +425,7 @@ local function printHelp()
     print(prettyName .. " - Arguments for |cFFFFFF78/oetooltip|r are:")
     print("|cFFFFFF78on|r|||cFFFFFF78off|r - Enable/disable tooltip modifications.")
     print("|cFFFFFF78reset|r - Reset all preferences and enable all lines.")
+    print("|cFFFFFF78coins|r - Toggle displaying coin prices.")
     print("|cFFFFFF78quiet|r - Disable all lines.")
     print("|cFFFFFF78age|r - Toggle data age line. " .. getLineStatus('age'))
     print("|cFFFFFF78market|r - Toggle realm price line. " .. getLineStatus('market'))
@@ -526,7 +530,10 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
         wipe(tooltipsSettings)
         OETooltip(true)
         print(prettyName .. " - Preferences reset to defaults.")
-    elseif msg == 'quiet' then
+
+        return
+    end
+    if msg == 'quiet' then
         for input, lineName in pairs(lineNames) do
             local settingName = 'disable-' .. lineName
             tooltipsSettings[settingName] = true
@@ -534,7 +541,8 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
         print(prettyName .. " - All lines disabled.")
 
         return
-    elseif lineNames[loweredMsg] then
+    end
+    if lineNames[loweredMsg] then
         local lineName = lineNames[loweredMsg]
         local settingName = 'disable-' .. lineName
         if tooltipsSettings[settingName] then
@@ -546,15 +554,32 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
         end
 
         return
-    elseif msg == 'on' then
+    end
+    if msg == 'coins' then
+        if tooltipsSettings['coins'] then
+            tooltipsSettings['coins'] = nil
+            print(prettyName .. " - Coins display disabled.")
+        else
+            tooltipsSettings['coins'] = true;
+            print(prettyName .. " - Coins display enabled.")
+        end
+
+        return
+    end
+    if msg == 'on' then
         OETooltip(true)
         print(prettyName .. " - Tooltip additions enabled.")
-    elseif msg == 'off' then
+
+        return
+    end
+    if msg == 'off' then
         OETooltip(false)
         print(prettyName .. " - Tooltip additions disabled.")
-    else
-        printHelp()
+
+        return
     end
+
+    printHelp()
 end
 
 local origGetAuctionBuyout = GetAuctionBuyout
@@ -576,5 +601,3 @@ function GetAuctionBuyout(item) -- Tekkub's API
 
     return nil
 end
-
-
