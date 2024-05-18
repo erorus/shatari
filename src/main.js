@@ -77,6 +77,13 @@ async function main() {
         process.exit();
     }, MAX_RUN_TIME + 5 * Constants.MS_MINUTE);
 
+    {
+        let alivenessPingback = process.env.ALIVENESS_PINGBACK;
+        if (alivenessPingback) {
+            aliveness.setPingback(alivenessPingback);
+        }
+    }
+
     const clearRealmTimers = () => {
         for (let k in realmQueue.timers) {
             if (realmQueue.timers.hasOwnProperty(k)) {
