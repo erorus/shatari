@@ -40,3 +40,7 @@ cd ..
 node src/addon.curse.js
 
 wago_upload
+
+if [ "$ADDON_PINGBACK" != "" ]; then
+  curl -fsS --retry 3 -o /dev/null "$ADDON_PINGBACK"
+fi
