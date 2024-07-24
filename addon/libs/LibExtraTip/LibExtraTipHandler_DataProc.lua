@@ -11,7 +11,7 @@ LibExtraTip.lua - main code file
 LibMoneyFrame.lua - routines for handling display of money values
 Load.xml - loads the lua files in the above order
 
-Copyright (C) 2008-2023, by the respective below authors.
+Copyright (C) 2008-2024, by the respective below authors.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -61,7 +61,7 @@ private.HookDataProcessor(datatype, posthook)
 --]]
 
 -- First thing: check that the required API exists - exit immediately if it does not
-if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and TooltipUtil) then return end
+if not (C_TooltipInfo and TooltipUtil and TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall) then return end
 
 local lib = LibStub("LibExtraTip-1")
 if not lib then return end
@@ -85,6 +85,7 @@ local DEACTIVATED = 99			-- set during Deactivate for each file
 -- check for permission to load this file
 if status.filetrackerHandler ~= LOAD_NEW then return end
 status.filetrackerHandler = LOAD_START
+versions.HANDLER = "DataProc"
 
 --[[
 List of accessors
@@ -214,7 +215,7 @@ local function GenerateGatherdata()
 			local index = getterArgs[1]
 			local additional = reg.additional
 			local _,_,p,q,na,cu,ec = GetMerchantItemInfo(index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetMerchantItem"
 			additional.eventIndex = index
 			additional.price = p
@@ -238,7 +239,7 @@ local function GenerateGatherdata()
 			local link = GetInventoryItemLink(unit, index)
 			if link then -- only process occupied slots
 				local additional = reg.additional
-				reg.quantity = GetInventoryItemCount(unit, index)
+				additional.quantity = GetInventoryItemCount(unit, index)
 				additional.event = "SetInventoryItem"
 				additional.eventIndex = index
 				additional.eventUnit = unit
@@ -255,7 +256,7 @@ local function GenerateGatherdata()
 			--[[ ### todo: find a quick way to gather the following info in WoW10.x - possibly via the Schematic?
 			if C_TradeSkillUI.GetRecipeReagentInfo then
 				local _,_,q,rc = C_TradeSkillUI.GetRecipeReagentInfo(recipeID, reagentIndex)
-				reg.quantity = q
+				additional.quantity = q
 				additional.playerReagentCount = rc
 			end
 			--]]
@@ -276,24 +277,25 @@ local function GenerateGatherdata()
 			additional.eventSubIndex = itemIndex -- may be nil
 			if itemIndex then
 				local _,_,_,q,_,cu = GetInboxItemInfo(index, itemIndex)
-				reg.quantity = q
+				additional.quantity = q
 				additional.canUse = cu
 			end
 		end,
 
 		GetSendMailItem = function(reg, getterArgs)
 			local index = getterArgs[1]
+			local additional = reg.additional
 			local _, _, _, quantity = GetSendMailItemInfo(index)
-			reg.quantity = quantity
-			reg.additional.event = "SetSendMailItem"
-			reg.additional.eventIndex = index
+			additional.quantity = quantity
+			additional.event = "SetSendMailItem"
+			additional.eventIndex = index
 		end,
 
 		GetTradePlayerItem = function(reg, getterArgs)
 			local index = getterArgs[1]
 			local additional = reg.additional
 			local _, _, quantity = GetTradePlayerItemInfo(index)
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetTradePlayerItem"
 			additional.eventIndex = index
 		end,
@@ -302,7 +304,7 @@ local function GenerateGatherdata()
 			local index = getterArgs[1]
 			local additional = reg.additional
 			local _, _, quantity = GetTradeTargetItemInfo(index)
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetTradeTargetItem"
 			additional.eventIndex = index
 		end,
@@ -311,7 +313,7 @@ local function GenerateGatherdata()
 			local qtype, index = getterArgs[1], getterArgs[2]
 			local _,_,q,_,cu = GetQuestItemInfo(qtype, index)
 			local additional = reg.additional
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetQuestItem"
 			additional.eventType = qtype
 			additional.eventIndex = index
@@ -324,7 +326,7 @@ local function GenerateGatherdata()
 			local additional = reg.additional
 			local func = (qtype == "choice") and GetQuestLogChoiceInfo or GetQuestLogRewardInfo
 			local _,_,q,_,cu = func(index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetQuestLogItem"
 			additional.eventType = qtype
 			additional.eventIndex = index
@@ -338,7 +340,7 @@ local function GenerateGatherdata()
 			local index = getterArgs[1]
 			local additional = reg.additional
 			local _,_,q = GetLootSlotInfo(index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetLootItem"
 			additional.eventIndex = index
 		end,
@@ -347,7 +349,7 @@ local function GenerateGatherdata()
 			local index = getterArgs[1]
 			local additional = reg.additional
 			local texture, name, count, quality = GetLootRollItemInfo(index)
-			reg.quantity = count
+			additional.quantity = count
 			additional.event = "SetLootRollItem"
 			additional.eventIndex = index
 		end,
@@ -357,7 +359,7 @@ local function GenerateGatherdata()
 			local texture, quantity, locked = GetGuildBankItemInfo(tab, index)
 			if texture then -- only process occupied slots
 				local additional = reg.additional
-				reg.quantity = quantity
+				additional.quantity = quantity
 				additional.event = "SetGuildBankItem"
 				additional.eventContainer = tab
 				additional.eventIndex = index
@@ -376,7 +378,7 @@ local function GenerateGatherdata()
 			local info = GetContainerItemInfo(bag, slot)
 			if info and info.iconFileID then -- only process occupied slots
 				local additional = reg.additional
-				reg.quantity = info.stackCount
+				additional.quantity = info.stackCount
 				additional.event = "SetBagItem"
 				additional.eventContainer = bag
 				additional.eventIndex = slot
@@ -395,7 +397,7 @@ local function GenerateGatherdata()
 			local index = getterArgs[1]
 			local additional = reg.additional
 			local _,_,price,quantity = GetBuybackItemInfo(index)
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetBuybackItem"
 			additional.eventIndex = index
 			additional.price = p
@@ -519,11 +521,11 @@ local function GenerateGatherdata()
 			additional.minMade = minMade
 			additional.maxMade = maxMade
 			if minMade and maxMade then -- protect against nil values
-				reg.quantity = (minMade + maxMade) / 2 -- ### todo: may not be an integer, if this causes problems may need to math.floor it
+				additional.quantity = (minMade + maxMade) / 2 -- ### todo: may not be an integer, if this causes problems may need to math.floor it
 			elseif maxMade then
-				reg.quantity = maxMade
+				additional.quantity = maxMade
 			else
-				reg.quantity = minMade -- note: may still be nil
+				additional.quantity = minMade -- note: may still be nil
 			end
 			additional.link = GetRecipeItemLink(recipeID)
 		end,
@@ -540,7 +542,7 @@ local function GenerateGatherdata()
 			additional.actionIndex = id
 			additional.actionSubtype = subtype
 			if t == "item" then
-				reg.quantity = GetActionCount(actionid)
+				additional.quantity = GetActionCount(actionid)
 			elseif t == "spell" then
 				if id and id > 0 then
 					additional.link = GetSpellLink(id)
@@ -566,7 +568,6 @@ local function GenerateGatherdata()
 		GetHyperlink = function(reg, getterArgs)
 			if reg.ignoreSetHyperlink then return end -- don't overwrite SetHyperlinkAndCount info
 			local link = getterArgs[1]
-			reg.item = link
 			local additional = reg.additional
 			additional.event = "SetHyperlink"
 			additional.eventLink = link
@@ -625,7 +626,7 @@ local function GenerateTDPHooks()
 	local GetRegistry = private.GetRegistry
 
 	local GetItemLinkByGUID = C_Item.GetItemLinkByGUID
-	local GetItemInfo = GetItemInfo
+	local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 	local GetSpellInfo = GetSpellInfo
 	local GetSpellSubtext = GetSpellSubtext
 	local UnitTokenFromGUID = UnitTokenFromGUID
@@ -651,18 +652,17 @@ local function GenerateTDPHooks()
 		end
 
 		local truelink = additional.link -- link provided by GetX function. Preferred if it exists
-		local item = truelink or data.hyperlink or (data.guid and GetItemLinkByGUID(data.guid)) or reg.item
+		local item = truelink or data.hyperlink or (data.guid and GetItemLinkByGUID(data.guid)) or additional.eventLink
 		-- ### todo: previous versions of tooltip:GetItem() could return odd values like "" or other malformed links
 		-- ### the above data operations replaced GetItem - do we still need to check for bad results?
 		if not item then return end
 
 		local name,link,quality,ilvl,minlvl,itype,isubtype,stack,equiploc,texture,sellPrice,classID,subclassID,bindType,expacID,setID,isCraftingReagent = GetItemInfo(item)
 		if not name or name == "" then return end
-		reg.item = reg.item or item
 		link = truelink or link
 		quality = additional.quality or quality
 		if not quality or quality < 0 then quality = 0 end
-		local quantity = reg.quantity or 1
+		local quantity = additional.quantity or 1
 
 		additional.item = item
 		additional.quantity = quantity
@@ -683,6 +683,7 @@ local function GenerateTDPHooks()
 		additional.expacID = expacID
 		additional.setID = setID
 		additional.isCraftingReagent = isCraftingReagent
+		additional.tooltipData = data
 
 		ProcessItem(tooltip, reg)
 	end
@@ -714,6 +715,7 @@ local function GenerateTDPHooks()
 		local name, _, icon, ctime, minRange, maxRange, spellID = GetSpellInfo(spell)
 		if not (name and spellID) then return end
 		local subtext = GetSpellSubtext(spellID) -- may be nil: spell may not have subtext, also subtext is only loaded on demand (?)
+		local spelllink = GetSpellLink(spellID) -- Caution: this will be a 'spell' type link, even if the spellID relates to a different type (e.g. 'enchant')
 
 		additional.name = name
 		additional.spellID = spellID
@@ -723,6 +725,8 @@ local function GenerateTDPHooks()
 		additional.castTime = ctime
 		additional.minRange = minRange
 		additional.maxRange = maxRange
+		additional.spellLink = spelllink
+		additional.tooltipData = data
 
 		ProcessSpell(tooltip, reg)
 	end
@@ -759,6 +763,7 @@ local function GenerateTDPHooks()
 		additional.name = name
 		additional.unitId = unitId
 		additional.guid = guid
+		additional.tooltipData = data
 
 		ProcessUnit(tooltip, reg)
 	end

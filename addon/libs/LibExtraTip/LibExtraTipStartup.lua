@@ -11,7 +11,7 @@ LibExtraTip.lua - main code file
 LibMoneyFrame.lua - routines for handling display of money values
 Load.xml - loads the lua files in the above order
 
-Copyright (C) 2008-2023, by the respective below authors.
+Copyright (C) 2008-2024, by the respective below authors.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 local LIBNAME = "LibExtraTip"
 local VERSION_MAJOR = 1
-local VERSION_MINOR = 359
+local VERSION_MINOR = 361
 -- Minor Version should be updated manually with each (non-trivial) change to any LibExtraTip code file
 
 local lib = LibStub:NewLibrary(LIBNAME.."-"..VERSION_MAJOR, VERSION_MINOR)

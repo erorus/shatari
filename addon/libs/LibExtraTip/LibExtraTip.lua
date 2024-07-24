@@ -11,7 +11,7 @@ LibExtraTip.lua - main code file
 LibMoneyFrame.lua - routines for handling display of money values
 Load.xml - loads the lua files in the above order
 
-Copyright (C) 2008-2023, by the respective below authors.
+Copyright (C) 2008-2024, by the respective below authors.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -145,10 +145,11 @@ end
 -- Function that gets run when an item is set on a registered tooltip.
 -- Values in reg are set by the appropriate Handler
 -- Handler should have confirmed reg.hasItem to be nil/false
--- Handler should have verified reg.item, reg.additional.name, reg.additional.quantity, reg.additional.quality, reg.additional.link
+-- Handler should have verified reg.additional.item, reg.additional.name, reg.additional.quantity, reg.additional.quality, reg.additional.link
 function private.ProcessItem(tooltip, reg)
 	local self = lib
-	local item, additional = reg.item, reg.additional
+	local additional = reg.additional
+	local item = additional.item
 	local name, quantity, link, quality = additional.name, additional.quantity, additional.link, additional.quality
 
 	if not self.sortedCallbacks or #self.sortedCallbacks == 0 then
@@ -159,8 +160,8 @@ function private.ProcessItem(tooltip, reg)
 	local extraTip = private.GetFreeExtraTipObject()
 	reg.extraTip = extraTip
 	extraTip:Attach(tooltip)
-	local r,g,b = GetItemQualityColor(quality)
-	extraTip:AddLine(name,r,g,b)
+	local qcol = ITEM_QUALITY_COLORS[quality] or ITEM_QUALITY_COLORS[1] -- default to 'common' if quality is not in the table
+	extraTip:AddLine(name, qcol.r, qcol.g, qcol.b)
 
 	-- Removed additional parameters after quality:
 	-- The 'additional' table can be accessed using lib:GetTooltipAdditional(tooltip) if needed
@@ -176,11 +177,16 @@ end
 -- Function that gets run when a spell is set on a registered tooltip.
 -- Values in reg are set by the appropriate Handler
 -- Handler should have confirmed reg.hasItem to be nil/false
--- Handler should have verified reg.additional.name, reg.additional.spellID, reg.additional.link (may be nil?), reg.additional.category (may be nil?)
+-- Handler should have verified reg.additional.name, reg.additional.spellID
 function private.ProcessSpell(tooltip, reg)
 	local self = lib
 	local additional = reg.additional
-	local name, spellID, link, category = additional.name, additional.spellID, additional.link, additional.category
+	local name, spellID = additional.name, additional.spellID
+	local category = additional.category -- may be spell rank, spell subtext or nil depending on client
+	local link = additional.link or additional.eventLink or additional.spellLink
+	-- additional.link will only be present if an API related to the event has returned a valid full link - there are not many APIs that return spell links
+	-- additional.eventLink will be present if a link was provided TO the event, e.g. SetHyperlink. Caution: may not be a full hyperlink
+	-- additional.spellLink is generated from the spellID and will always be a full 'spell' link, even if the proper link should be a different type (e.g. 'enchant')
 
 	if not self.sortedCallbacks or #self.sortedCallbacks == 0 then
 		return
@@ -236,9 +242,7 @@ function private.OnCleared(tooltip)
 	tooltip:SetFrameLevel(1)
 
 	reg.extraTipUsed = nil
-	reg.quantity = nil
 	reg.hasItem = nil
-	reg.item = nil
 	wipe(reg.additional)
 	local extraTip = reg.extraTip
 	if extraTip then
@@ -288,8 +292,9 @@ function private.OnSetBattlePet(tooltip, data)
 		end
 
 		-- for certain events there may already be info stored in reg - e.g. SetBattlePetAndCount
-		local quantity = reg.quantity or 1
-		local link = reg.item
+		local additional = reg.additional
+		local quantity = additional.quantity or 1
+		local link = additional.eventLink
 		if not link then
 			-- it's a bit of a pain that we need to reconstruct a link here, just so it can be chopped up again...
 			link = format("%s|Hbattlepet:%d:%d:%d:%d:%d:%d:%s|h[%s]|h|r", colcode, speciesID, level, breedQuality, maxHealth, power, speed, battlePetID, customName or name)
@@ -301,20 +306,20 @@ function private.OnSetBattlePet(tooltip, data)
 		extraTip:Attach(tooltip)
 		extraTip:AddLine(name, r, g, b)
 
-		reg.additional.name = name
-		reg.additional.link = link
-		reg.additional.speciesID = speciesID
-		reg.additional.quality = breedQuality
-		reg.additional.quantity = quantity
-		reg.additional.level = level
-		reg.additional.customName = customName -- nil if no custom name
-		reg.additional.petType = petType
-		reg.additional.maxHealth = maxHealth
-		reg.additional.power = power
-		reg.additional.speed = speed
-		reg.additional.battlePetID = battlePetID -- if not 0 it's a pet in your journal
+		additional.name = name
+		additional.link = link
+		additional.speciesID = speciesID
+		additional.quality = breedQuality
+		additional.quantity = quantity
+		additional.level = level
+		additional.customName = customName -- nil if no custom name
+		additional.petType = petType
+		additional.maxHealth = maxHealth
+		additional.power = power
+		additional.speed = speed
+		additional.battlePetID = battlePetID -- if not 0 it's a pet in your journal
 
-		reg.additional.event = reg.additional.event or "SetBattlePet"
+		additional.event = additional.event or "SetBattlePet"
 
 		ProcessCallbacks(reg, "battlepet", tooltip, link, quantity, name, speciesID, breedQuality, level)
 		if reg.extraTipUsed then
@@ -863,10 +868,10 @@ function lib:SetHyperlinkAndCount(tooltip, link, quantity, detail)
 	if not reg or reg.NoColumns then return end -- NoColumns tooltips can't handle :SetHyperlink
 
 	private.OnCleared(tooltip)
-	reg.quantity = quantity
-	reg.item = link
-	reg.additional.event = "SetHyperlinkAndCount"
-	reg.additional.eventLink = link
+	local additional = reg.additional
+	additional.quantity = quantity
+	additional.event = "SetHyperlinkAndCount"
+	additional.eventLink = link
 	if detail then
 		for k,v in pairs(detail) do
 			reg.additional[k] = v
@@ -923,10 +928,10 @@ function lib:SetBattlePetAndCount(tooltip, link, quantity, detail)
 
 	-- set up reg
 	private.OnCleared(tooltip)
-	reg.quantity = quantity
-	reg.item = link
-	reg.additional.event = "SetBattlePetAndCount"
-	reg.additional.eventLink = link
+	local additional = reg.additional
+	additional.quantity = quantity
+	additional.event = "SetBattlePetAndCount"
+	additional.eventLink = link
 	if detail then
 		for k,v in pairs(detail) do
 			reg.additional[k] = v

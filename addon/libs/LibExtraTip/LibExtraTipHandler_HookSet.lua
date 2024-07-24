@@ -11,7 +11,7 @@ LibExtraTip.lua - main code file
 LibMoneyFrame.lua - routines for handling display of money values
 Load.xml - loads the lua files in the above order
 
-Copyright (C) 2008-2023, by the respective below authors.
+Copyright (C) 2008-2024, by the respective below authors.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 -- First thing: look for the API used by the other handler and exit immediately if it is found
 -- If this API does not exist we shall mostly assume the APIs needed by this file do exist
-if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then return end
+if C_TooltipInfo and TooltipUtil and TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall then return end
 
 --[[
 Only one of the LibExtraTipHandler files will load, depending on which API is supported by the client
@@ -85,6 +85,7 @@ local DEACTIVATED = 99			-- set during Deactivate for each file
 -- check for permission to load this file
 if status.filetrackerHandler ~= LOAD_NEW then return end
 status.filetrackerHandler = LOAD_START
+versions.HANDLER = "HookSet"
 
 -- Forward definition of file level locals, will be filled in later in the load process
 local tooltipMethodPrehooks, tooltipMethodPosthooks
@@ -147,7 +148,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local name,texture,price,quantity = GetBuybackItemInfo(index)
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetBuybackItem"
 			additional.eventIndex = index
 		end,
@@ -160,7 +161,7 @@ local function GenerateTooltipMethodTable()
 			if texture then -- only process occupied slots
 				reg.ignoreOnCleared = true
 				local additional = reg.additional
-				reg.quantity = quantity
+				additional.quantity = quantity
 				additional.event = "SetGuildBankItem"
 				additional.eventContainer = tab
 				additional.eventIndex = index
@@ -180,7 +181,7 @@ local function GenerateTooltipMethodTable()
 			additional.eventSubIndex = itemIndex -- may be nil
 			if itemIndex then
 				local _,_,_,q,_,cu = GetInboxItem(index, itemIndex)
-				reg.quantity = q
+				additional.quantity = q
 				additional.canUse = cu
 			end
 		end,
@@ -193,7 +194,7 @@ local function GenerateTooltipMethodTable()
 			if link then -- only process occupied slots
 				reg.ignoreOnCleared = true
 				local additional = reg.additional
-				reg.quantity = GetInventoryItemCount(unit, index)
+				additional.quantity = GetInventoryItemCount(unit, index)
 				additional.event = "SetInventoryItem"
 				additional.eventIndex = index
 				additional.eventUnit = unit
@@ -208,7 +209,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local _,_,q = GetLootSlotInfo(index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetLootItem"
 			additional.eventIndex = index
 		end,
@@ -220,7 +221,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local texture, name, count, quality = GetLootRollItemInfo(index)
-			reg.quantity = count
+			additional.quantity = count
 			additional.event = "SetLootRollItem"
 			additional.eventIndex = index
 		end,
@@ -232,7 +233,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local _,_,p,q,na,cu,ec = GetMerchantItemInfo(index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetMerchantItem"
 			additional.eventIndex = index
 			additional.price = p
@@ -249,7 +250,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local _,_,q,_,cu = GetQuestItemInfo(type,index)
 			local additional = reg.additional
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetQuestItem"
 			additional.eventType = type
 			additional.eventIndex = index
@@ -265,7 +266,7 @@ local function GenerateTooltipMethodTable()
 			local additional = reg.additional
 			local func = type == "choice" and GetQuestLogChoiceInfo or GetQuestLogRewardInfo
 			local _,_,q,_,cu = func(index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetQuestLogItem"
 			additional.eventType = type
 			additional.eventIndex = index
@@ -278,10 +279,11 @@ local function GenerateTooltipMethodTable()
 			if not reg then return end
 			OnCleared(self)
 			reg.ignoreOnCleared = true
+			local additional = reg.additional
 			local name, itemID, texture, quantity = GetSendMailItem(index)
-			reg.quantity = quantity
-			reg.additional.event = "SetSendMailItem"
-			reg.additional.eventIndex = index
+			additional.quantity = quantity
+			additional.event = "SetSendMailItem"
+			additional.eventIndex = index
 		end,
 
 		SetTradePlayerItem = function(self,index)
@@ -291,7 +293,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local name, texture, quantity = GetTradePlayerItemInfo(index)
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetTradePlayerItem"
 			additional.eventIndex = index
 		end,
@@ -303,7 +305,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local name, texture, quantity = GetTradeTargetItemInfo(index)
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetTradeTargetItem"
 			additional.eventIndex = index
 		end,
@@ -320,7 +322,7 @@ local function GenerateTooltipMethodTable()
 			additional.eventSubIndex = reagentIndex
 			if C_TradeSkillUI.GetRecipeReagentInfo then
 				local _,_,q,rc = C_TradeSkillUI.GetRecipeReagentInfo(recipeID, reagentIndex)
-				reg.quantity = q
+				additional.quantity = q
 				additional.playerReagentCount = rc
 			end
 			if C_TradeSkillUI.GetRecipeReagentItemLink then
@@ -345,11 +347,11 @@ local function GenerateTooltipMethodTable()
                 additional.minMade = minMade
                 additional.maxMade = maxMade
                 if minMade and maxMade then -- protect against nil values
-                    reg.quantity = (minMade + maxMade) / 2 -- ### todo: may not be an integer, if this causes problems may need to math.floor it
+                    additional.quantity = (minMade + maxMade) / 2 -- ### todo: may not be an integer, if this causes problems may need to math.floor it
                 elseif maxMade then
-                    reg.quantity = maxMade
+                    additional.quantity = maxMade
                 else
-                    reg.quantity = minMade -- note: may still be nil
+                    additional.quantity = minMade -- note: may still be nil
                 end
                 additional.link = GetTradeSkillRecipeLink(recipeID)
             else
@@ -361,14 +363,14 @@ local function GenerateTooltipMethodTable()
 				if recipeSchematic then
 					minMade, maxMade = recipeSchematic.quantityMin, recipeSchematic.quantityMax
 				end
-                reg.additional.minMade = minMade
-                reg.additional.maxMade = maxMade
+                additional.minMade = minMade
+                additional.maxMade = maxMade
                 if minMade and maxMade then -- protect against nil values
-                    reg.quantity = (minMade + maxMade) / 2 -- ### todo: may not be an integer, if this causes problems may need to math.floor it
+                    additional.quantity = (minMade + maxMade) / 2 -- ### todo: may not be an integer, if this causes problems may need to math.floor it
                 elseif maxMade then
-                    reg.quantity = maxMade
+                    additional.quantity = maxMade
                 else
-                    reg.quantity = minMade -- note: may still be nil
+                    additional.quantity = minMade -- note: may still be nil
                 end
                 additional.link = C_TradeSkillUI.GetRecipeItemLink(recipeID)
             end
@@ -387,12 +389,12 @@ local function GenerateTooltipMethodTable()
 			additional.eventSubIndex = reagentIndex
             if reagentIndex then
                 local _,_,q,rc = GetCraftReagentInfo(recipeID, reagentIndex)
-                reg.quantity = q
+                additional.quantity = q
                 additional.playerReagentCount = rc
                 additional.link = GetCraftReagentItemLink(recipeID, reagentIndex)
             else
 				additional.link = GetCraftItemLink(recipeID)
-				reg.quantity = GetCraftNumMade(recipeID)
+				additional.quantity = GetCraftNumMade(recipeID)
             end
 		end,
 
@@ -408,12 +410,12 @@ local function GenerateTooltipMethodTable()
 			additional.eventSubIndex = reagentIndex
             if reagentIndex then
                 local _,_,q,rc = GetTradeSkillReagentInfo(recipeID, reagentIndex)
-                reg.quantity = q
+                additional.quantity = q
                 additional.playerReagentCount = rc
                 additional.link = GetTradeSkillReagentItemLink(recipeID, reagentIndex)
             else
 				additional.link = GetTradeSkillItemLink(recipeID)
-				reg.quantity = GetTradeSkillNumMade(recipeID)
+				additional.quantity = GetTradeSkillNumMade(recipeID)
             end
 		end,
 
@@ -424,7 +426,6 @@ local function GenerateTooltipMethodTable()
 			if reg.ignoreSetHyperlink then return end
 			OnCleared(self)
 			reg.ignoreOnCleared = true
-			reg.item = link
 			local additional = reg.additional
 			additional.event = "SetHyperlink"
 			additional.eventLink = link
@@ -445,7 +446,7 @@ local function GenerateTooltipMethodTable()
 			reg.additional.actionIndex = id
 			reg.additional.actionSubtype = subtype
 			if t == "item" then
-				reg.quantity = GetActionCount(actionid)
+				reg.additional.quantity = GetActionCount(actionid)
 			elseif t == "spell" then
 				if id and id > 0 then
 					local link = GetSpellLink(id, sub)
@@ -643,7 +644,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local _,_,q,_,cu,_,_,minb,inc,bo,ba,hb,_,own,ownf = GetAuctionItemInfo(type,index)
-			reg.quantity = q
+			additional.quantity = q
 			additional.event = "SetAuctionItem"
 			additional.eventType = type
 			additional.eventIndex = index
@@ -667,7 +668,7 @@ local function GenerateTooltipMethodTable()
 			reg.ignoreOnCleared = true
 			local additional = reg.additional
 			local name,texture,quantity,quality,canUse,price = GetAuctionSellItemInfo()
-			reg.quantity = quantity
+			additional.quantity = quantity
 			additional.event = "SetAuctionSellItem"
 			additional.canUse = canUse
 		end
@@ -687,7 +688,7 @@ local function GenerateTooltipMethodTable()
 			if info and info.iconFileID then -- only process occupied slots
 				reg.ignoreOnCleared = true
 				local additional = reg.additional
-				reg.quantity = info.stackCount
+				additional.quantity = info.stackCount
 				additional.event = "SetBagItem"
 				additional.eventContainer = bag
 				additional.eventIndex = slot
@@ -712,7 +713,7 @@ local function GenerateTooltipMethodTable()
 			if tex then -- only process occupied slots
 				reg.ignoreOnCleared = true
 				local additional = reg.additional
-				reg.quantity = q
+				additional.quantity = q
 				additional.event = "SetBagItem"
 				additional.eventContainer = bag
 				additional.eventIndex = slot
@@ -737,6 +738,7 @@ local function GenerateHandlers()
 	local ProcessItem = private.ProcessItem
 	local ProcessSpell = private.ProcessSpell
 	local ProcessUnit = private.ProcessUnit
+	local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 
 	HandlerItem = function(tooltip) -- called from OnTooltipSetItem
 		local testname
@@ -750,15 +752,15 @@ local function GenerateHandlers()
 		if not item then
 			testname, item = tooltip:GetItem()
 			if not item then
-				item = reg.item
+				item = additional.eventLink
 			elseif testname == "" then
 				-- Blizzard broke tooltip:GetItem() in 6.2. Detect and fix the bug if possible. Remove workaround when fixed by Blizzard. [LTT-56]
 				-- thanks to sapu for identifying bug and suggesting workaround
 				-- Broken differently in 7.0 because 0 is not printed in itemstrings, and it would find the player level as the first number [LTT-59]
 				local checkItemID = strmatch(item, "item:(%d*):") -- this match string should find the itemID in any link
-				--DebugPrintQuick("failed name check ", checkItemID, testname, item, item:gsub(".*item:", ""), reg.item, reg.additional.link )
+				--DebugPrintQuick("failed name check ", checkItemID, testname, item, item:gsub(".*item:", ""), additional.eventLink, reg.additional.link )
 				if not checkItemID or checkItemID == "" then -- it's usually "" for recipes
-					item = reg.item -- try to find a valid link from another source (or set to nil if we can't find one)
+					item = additional.eventLink -- try to find a valid link from another source (or set to nil if we can't find one)
 				end
 			end
 			if not item then return end
@@ -766,11 +768,10 @@ local function GenerateHandlers()
 
 		local name,link,quality,ilvl,minlvl,itype,isubtype,stack,equiploc,texture,sellPrice,classID,subclassID,bindType,expacID,setID,isCraftingReagent = GetItemInfo(item)
 		if not name or name == "" then return end
-		reg.item = reg.item or item
 		link = truelink or link
 		quality = additional.quality or quality
 		if not quality or quality < 0 then quality = 0 end
-		local quantity = reg.quantity or 1
+		local quantity = additional.quantity or 1
 
 		additional.item = item
 		additional.quantity = quantity
@@ -810,6 +811,7 @@ local function GenerateHandlers()
 		local name, _, icon, ctime, minRange, maxRange, spellID = GetSpellInfo(spell)
 		if not (name and spellID) then return end
 		local subtext = GetSpellSubtext(spellID) -- may be nil: spell may not have subtext, also subtext is only loaded on demand (?)
+		local spelllink = GetSpellLink(spellID) -- Caution: this will be a 'spell' type link, even if the spellID relates to a different type (e.g. 'enchant')
 
 		additional.name = name
 		additional.spellID = spellID
@@ -819,6 +821,7 @@ local function GenerateHandlers()
 		additional.castTime = ctime
 		additional.minRange = minRange
 		additional.maxRange = maxRange
+		additional.spellLink = spelllink
 
 		ProcessSpell(tooltip, reg)
 	end

@@ -77,7 +77,7 @@ local function createCoin(frame, pos, width, height, parentFrame)
 	frame.label:SetFont(font, height)
 	frame.label:SetPoint("TOPLEFT", frame, "TOPLEFT", 0,0)
 	frame.label:SetJustifyH("RIGHT")
-	frame.label:SetJustifyV("CENTER")
+	frame.label:SetJustifyV("MIDDLE")
 	frame.label:Show()
 
 	frame.texture = frame:CreateTexture()
@@ -97,7 +97,7 @@ local function createCoin(frame, pos, width, height, parentFrame)
 	frame.altText:SetPoint("TOPLEFT", frame.label, "TOPRIGHT", 2,0)
 	frame.altText:SetPoint("BOTTOM", frame.label, "BOTTOM", 0,0)
 	frame.altText:SetJustifyH("LEFT")
-	frame.altText:SetJustifyV("CENTER")
+	frame.altText:SetJustifyV("MIDDLE")
     frame.altText:SetText(GOLD_AMOUNT_SYMBOL)   -- so it has something to measure
 
     if parentFrame.colorBlind then
