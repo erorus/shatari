@@ -205,7 +205,7 @@ local function GenerateGatherdata()
 	local GetRecipeItemLink = C_TradeSkillUI.GetRecipeItemLink
 	local GetActionInfo = GetActionInfo
 	local GetActionCount = GetActionCount
-	local GetSpellLink = GetSpellLink
+	local GetSpellLink = C_Spell and C_Spell.GetSpellLink or GetSpellLink
 
 
 	-- ### todo: We shall assume that getterArgs will always exist where any args are *required* by the SetX function
@@ -627,10 +627,19 @@ local function GenerateTDPHooks()
 
 	local GetItemLinkByGUID = C_Item.GetItemLinkByGUID
 	local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
-	local GetSpellInfo = GetSpellInfo
-	local GetSpellSubtext = GetSpellSubtext
 	local UnitTokenFromGUID = UnitTokenFromGUID
 	local UnitName = UnitName
+	local GetSpellSubtext = C_Spell and C_Spell.GetSpellSubtext or GetSpellSubtext
+	local GetSpellLink = C_Spell and C_Spell.GetSpellLink or GetSpellLink
+	local GetSpellInfo = GetSpellInfo
+	if not GetSpellInfo and C_Spell and C_Spell.GetSpellInfo then
+		local rawGetSpellInfo = C_Spell.GetSpellInfo
+		GetSpellInfo = function(...)
+			local info = rawGetSpellInfo(...)
+			return info.name, nil, info.iconID, info.castTime, info.minRange, info.maxRange, info.spellID, info.originalIconID
+		end
+	end
+
 
 	local function HandleItem(tooltip, data)
 		local reg = GetRegistry(tooltip)
