@@ -404,7 +404,7 @@ async function fetchInterfaceVersion() {
         return null;
     }
 
-    const match = response.data.match(/^##\s*Interface:\s*(\d+)/i);
+    const match = response.data.match(/^##\s*Interface:\s*([\d\s,]+)/i);
     if (match) {
         return match[1];
     }
@@ -496,7 +496,7 @@ addonTable.speciesStats = {${statsLua}}
 }
 
 async function generateToc() {
-    let addonInterface = (await fetchInterfaceVersion()) || '100207';
+    let addonInterface = (await fetchInterfaceVersion()) || '110000';
     let notes = dateFormat(new Date(now), 'dddd, mmmm dS, yyyy');
     let yyyymmdd = dateFormat(new Date(now), 'yyyymmdd');
     let dataFiles = [];
