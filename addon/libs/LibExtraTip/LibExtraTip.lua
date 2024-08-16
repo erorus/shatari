@@ -59,8 +59,6 @@ local DEACTIVATED = 99			-- set during Deactivate for each file
 if status.filetrackerMain ~= LOAD_NEW then return end
 status.filetrackerMain = LOAD_START
 
-LibStub("LibRevision"):Set("$URL$","$Rev$","10.03.DEV.", 'auctioneer', 'libs')
-
 -- A string unique to this version to prevent frame name conflicts.
 local LIBSTRING = versions.LIBNAME.."_"..versions.MAJOR.."_"..versions.MINOR
 

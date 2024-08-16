@@ -124,6 +124,3 @@ end
 -- set status to permit other files to load
 status.filetrackerMain = LOAD_NEW
 status.filetrackerHandler = LOAD_NEW
-
-LibStub("LibRevision"):Set("$URL$","$Rev$","10.02.DEV.", 'auctioneer', 'libs')
-

@@ -861,5 +861,3 @@ end
 if status.filetrackerHandler == LOAD_START then
 	status.filetrackerHandler = LOAD_COMPLETE
 end
-
-LibStub("LibRevision"):Set("$URL$","$Rev$","10.03.DEV.", 'auctioneer', 'libs')

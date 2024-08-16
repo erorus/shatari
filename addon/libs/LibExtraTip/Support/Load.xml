@@ -1,5 +1,3 @@
 <Ui xsi:schemaLocation="http://www.blizzard.com/wow/ui/">
 	<Script file="LibStub.lua"/>
-	<Script file="LibRevision.lua"/>
 </Ui>
-
