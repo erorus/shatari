@@ -24,7 +24,7 @@ if [ "$1" != "" ]; then
   echo "Will not upload zip to addon sites!"
 fi
 
-node --max-old-space-size=5120 src/addon.js
+node --max-old-space-size=3072 src/addon.js
 
 cd addon
 rm -f OribosExchange.zip
@@ -42,5 +42,7 @@ node src/addon.curse.js
 wago_upload
 
 if [ "$ADDON_PINGBACK" != "" ]; then
-  curl -fsS --retry 3 -o /dev/null "$ADDON_PINGBACK"
+  echo "Running pingback"
+  curl -fsS --retry 3 "$ADDON_PINGBACK"
+  echo ""
 fi

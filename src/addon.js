@@ -3,6 +3,7 @@ const process = require('process');
 const fs = require('fs').promises;
 const syncFs = require('fs');
 const Path = require('path');
+const v8 = require('v8');
 
 const dateFormat = require('dateformat');
 const BNet = require('./battlenet');
@@ -123,6 +124,9 @@ async function processRegion(region) {
             continue;
         }
 
+        // Remove this to save a little memory.
+        delete realmState.bonusStatItems;
+
         usedRealmStates[connectedRealm.id] = realmState;
         logMsg("Scanning " + region + " connected realm " + connectedRealm.id + " (" + connectedRealm.canonical.slug + ")");
 
@@ -130,6 +134,10 @@ async function processRegion(region) {
             if (!realmState.summary.hasOwnProperty(itemKeyString)) {
                 continue;
             }
+
+            // Only keep the snapshot from the summary, to save a bunch of memory.
+            realmState.summary[itemKeyString] = realmState.summary[itemKeyString][0];
+
             let itemKey = ItemKeySerialize.parse(itemKeyString);
             if (itemKey.itemId === Constants.ITEM_PET_CAGE) {
                 // We only include full battle pet strings, not those without breeds.
@@ -180,6 +188,9 @@ async function processRegion(region) {
         usedRealmStates[commodityRealmId] = realmState;
         logMsg(`Scanning ${region} commodity realm ${commodityRealmId}`);
         Object.keys(realmState.summary).forEach(itemKeyString => {
+            // Only keep the snapshot from the summary, to save a bunch of memory.
+            realmState.summary[itemKeyString] = realmState.summary[itemKeyString][0];
+
             let itemKey = ItemKeySerialize.parse(itemKeyString);
             if (itemKey.itemId === Constants.ITEM_PET_CAGE) {
                 return;
@@ -240,6 +251,9 @@ end
     let luaLines = 0;
     let dataFuncIndex = 0;
 
+    const heap = Math.round(v8.getHeapStatistics().total_heap_size / 1048576);
+    logMsg(`${region} Starting item processing. Heap: ${heap}MiB`);
+
     let nextLog = Date.now() + 5 * Constants.MS_SEC;
     for (let itemKeyString, itemKeyIndex = 0; itemKeyString = knownItemKeys[itemKeyIndex]; itemKeyIndex++) {
         let itemKey = ItemKeySerialize.parse(itemKeyString);
@@ -255,19 +269,19 @@ end
         let realmPrices = new Uint32Array(itemRealmCount);
 
         let processItemInRealm = async function (connectedId, realmIndex) {
-            let summaryData = usedRealmStates[connectedId].summary[itemKeyString];
+            let summarySnapshot = usedRealmStates[connectedId].summary[itemKeyString];
             let days;
 
             if (item.vendorBuy) {
                 days = 252;
-            } else if (!summaryData) {
+            } else if (!summarySnapshot) {
                 days = 0;
             } else {
-                days = Math.min(251, Math.floor(Math.max(0, now - summaryData[0]) / Constants.MS_DAY));
+                days = Math.min(251, Math.floor(Math.max(0, now - summarySnapshot) / Constants.MS_DAY));
             }
             realmDays[realmIndex] = days;
 
-            if (!summaryData) {
+            if (!summarySnapshot) {
                 return;
             }
 
@@ -352,7 +366,9 @@ end
         }
 
         if (nextLog <= Date.now()) {
-            logMsg(`${region} Processed ` + (itemKeyIndex + 1) + " of " + knownItemKeys.length + " or " + Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100) + "%. (Last was " + itemKeyString + ")");
+            const heap = Math.round(v8.getHeapStatistics().total_heap_size / 1048576);
+            const percentage = Math.round((itemKeyIndex + 1) / knownItemKeys.length * 100);
+            logMsg(`${region} Processed ${itemKeyIndex + 1} of ${knownItemKeys.length} or ${percentage}%. (Last was ${itemKeyString}). Heap: ${heap}MiB`);
             nextLog = Date.now() + 5 * Constants.MS_SEC;
         }
     }
