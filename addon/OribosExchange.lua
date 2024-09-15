@@ -116,6 +116,10 @@ local function getBreedFromPetLink(link)
     local petString = string.match(link, "battlepet[%-?%d:]+")
     local _, speciesID, level, quality, health, power, speed = strsplit(":", petString)
 
+    if not (speciesID and level and quality and health and power and speed) then
+        return
+    end
+
     speciesID = tonumber(speciesID,10)
     level = tonumber(level,10)
     quality = tonumber(quality,10)
