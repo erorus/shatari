@@ -788,6 +788,12 @@ async function processConnectedRealm(connectedRealmId) {
         await GlobalState.put(globalState);
         GlobalState.unlock();
     }
+    if (response.status === 304) {
+        const lastModified = response.headers?.['last-modified'];
+        if (lastModified) {
+            logMsg(`No new data since ${lastModified}`, connectedRealmId);
+        }
+    }
 
     delete realmState.locked;
     await RealmState.put(connectedRealmId, realmState);
