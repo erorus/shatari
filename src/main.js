@@ -789,10 +789,9 @@ async function processConnectedRealm(connectedRealmId) {
         GlobalState.unlock();
     }
     if (response.status === 304) {
-        const lastModified = response.headers?.['last-modified'];
-        if (lastModified) {
-            logMsg(`No new data since ${lastModified}`, connectedRealmId);
-        }
+        const requestTime = Date.now() - realmState.lastCheck;
+        const lastModified = response.headers?.['last-modified'] ?? '?';
+        logMsg("Downloaded no new data in " + (requestTime / Constants.MS_SEC) + ` seconds since ${lastModified}`, connectedRealmId);
     }
 
     delete realmState.locked;
