@@ -6,10 +6,12 @@ module.exports = function (maxIntervalParam) {
     let lastCheckIn = Date.now();
     let timer = setInterval(timerCheck, 10000);
     let pingbackTimer;
+    let retryTimeout;
 
     this.close = function () {
         clearInterval(timer);
         clearInterval(pingbackTimer);
+        clearTimeout(retryTimeout);
     }
 
     this.checkIn = function () {
@@ -19,7 +21,20 @@ module.exports = function (maxIntervalParam) {
     this.setPingback = url => {
         clearInterval(pingbackTimer);
         if (url) {
-            const pingback = () => axios({url});
+            let failures = 0;
+            const pingback = () => {
+                try {
+                    axios({url, timeout: 10000});
+                    failures = 0;
+                } catch (e) {
+                    if (++failures > 3) {
+                        console.error(`Unable to load ${url} after ${failures} failures.`);
+                    } else {
+                        console.warn(`Failed to load ${url}. Will retry shortly.`);
+                        retryTimeout = setTimeout(pingback, 10000);
+                    }
+                }
+            };
             pingback();
             pingbackTimer = setInterval(pingback, maxInterval);
         }
