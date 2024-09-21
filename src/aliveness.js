@@ -22,15 +22,15 @@ module.exports = function (maxIntervalParam) {
         clearInterval(pingbackTimer);
         if (url) {
             let failures = 0;
-            const pingback = () => {
+            const pingback = async () => {
                 try {
-                    axios({url, timeout: 10000});
+                    await axios({url, timeout: 10000});
                     failures = 0;
                 } catch (e) {
                     if (++failures > 3) {
-                        console.error(`Unable to load ${url} after ${failures} failures.`);
+                        console.error(`Aliveness unable to load ${url} after ${failures} failures.`);
                     } else {
-                        console.warn(`Failed to load ${url}. Will retry shortly.`);
+                        console.warn(`Aliveness failed to load ${url}. Will retry shortly.`);
                         retryTimeout = setTimeout(pingback, 10000);
                     }
                 }
