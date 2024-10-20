@@ -9,6 +9,7 @@ const ItemKey = require('./itemKey');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
 const Runner = require('./runner');
+const ShatariWriter = require('./shatariWriter');
 
 const DATA_DIR = Constants.DATA_DIR;
 
@@ -249,20 +250,7 @@ const realmProcess = new function () {
 
         const json = JSON.stringify(list);
 
-        try {
-            await fs.writeFile(path, json);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                const parent = Path.dirname(path);
-
-                await fs.mkdir(parent, {recursive: true});
-                await fs.writeFile(path, json);
-
-                return;
-            }
-
-            throw error;
-        }
+        await ShatariWriter(path, json);
     }
 
     /**

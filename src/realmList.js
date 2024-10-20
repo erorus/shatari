@@ -5,6 +5,7 @@ const Path = require('path');
 const dateFormat = require('dateformat');
 const BNet = require('./battlenet');
 const RunOnce = require('./runOnce');
+const ShatariWriter = require('./shatariWriter');
 
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
@@ -47,14 +48,14 @@ async function main() {
     logMsg('' + Object.keys(realmList.ids).length + ' realms in current list.');
 
     let writes = [];
-    writes.push(fs.writeFile(listPath, JSON.stringify(realmList.ids)));
+    writes.push(ShatariWriter(listPath, JSON.stringify(realmList.ids)));
 
     for (let locale in realmList.names) {
         if (!realmList.names.hasOwnProperty(locale)) {
             continue;
         }
 
-        writes.push(fs.writeFile(
+        writes.push(ShatariWriter(
             Path.resolve(__dirname, '..', 'realms', 'realm-names.' + locale + '.json'),
             JSON.stringify(realmList.names[locale])
         ));

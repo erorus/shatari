@@ -4,6 +4,7 @@ const {gzip, ungzip} = require('node-gzip');
 
 const Constants = require('./constants');
 const ItemKeySerialize = require('./itemKeySerialize');
+const ShatariWriter = require('./shatariWriter');
 
 const DATA_DIR = Constants.DATA_DIR;
 
@@ -239,20 +240,7 @@ module.exports = new function () {
 
         const compressed = await gzip(buf);
 
-        try {
-            await fs.writeFile(path, compressed);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                const parent = Path.dirname(path);
-
-                await fs.mkdir(parent, {recursive: true});
-                await fs.writeFile(path, compressed);
-
-                return;
-            }
-
-            throw error;
-        }
+        await ShatariWriter(path, compressed);
     }
 
     // ------- //

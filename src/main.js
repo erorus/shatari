@@ -17,6 +17,7 @@ const TokenState = require('./tokenState');
 const GlobalState = require('./globalState');
 const Constants = require('./constants');
 const CommodityRealm = require('./commodityRealm');
+const ShatariWriter = require('./shatariWriter');
 
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
@@ -317,18 +318,7 @@ async function updateBoundItems() {
 
     let listJson = JSON.stringify(boundItems);
     let path = Path.resolve(__dirname, '..', 'ids.bound.json');
-    try {
-        await fs.writeFile(path, listJson);
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            const parent = Path.dirname(path);
-
-            await fs.mkdir(parent, {recursive: true});
-            await fs.writeFile(path, listJson);
-        } else {
-            throw error;
-        }
-    }
+    await ShatariWriter(path, listJson);
     logMsg(`bound items: ids.bound.json file updated.`);
 
     boundItemsLastChecked = Date.now();
@@ -437,18 +427,7 @@ async function updateDeals(region) {
         });
         csvPrices = {};
         let path = Path.resolve(Constants.DATA_DIR, 'global', `${region}.csv`);
-        try {
-            await fs.writeFile(path, csvData);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                const parent = Path.dirname(path);
-
-                await fs.mkdir(parent, {recursive: true});
-                await fs.writeFile(path, csvData);
-            } else {
-                throw error;
-            }
-        }
+        await ShatariWriter(path, csvData);
         logMsg(`${region} deals: CSV region file updated.`);
     }
 
