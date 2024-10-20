@@ -240,7 +240,7 @@ module.exports = new function () {
 
         const compressed = await gzip(buf);
 
-        await ShatariWriter(path, compressed, false);
+        await ShatariWriter(path, compressed);
     }
 
     // ------- //
