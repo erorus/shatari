@@ -531,10 +531,11 @@ function logQueueStatus() {
 /**
  * Returns the timestamp of the next time we should check for a snapshot, given a realm state.
  *
+ * @param {number} connectedRealmId
  * @param {object} realmState
  * @return {number}
  */
-function nextCheckTimestamp(realmState) {
+function nextCheckTimestamp(connectedRealmId, realmState) {
     const now = Date.now();
 
     if (!realmState.lastCheck) {
@@ -549,8 +550,9 @@ function nextCheckTimestamp(realmState) {
     }
     const nextSnapshot = (realmState.snapshot || realmState.lastCheck) + minInterval;
 
-    // Don't let us check more frequently than every 5 minutes.
-    const fallback = realmState.lastCheck + 5 * Constants.MS_MINUTE;
+    // Don't let us check more frequently than every 5 minutes (or 2 mins for commodity realms).
+    const minWindow = (CommodityRealm.isCommodityRealm(connectedRealmId) ? 2 : 5) * Constants.MS_MINUTE;
+    const fallback = realmState.lastCheck + minWindow;
 
     if (nextSnapshot < now) {
         // We're overdue.
@@ -620,7 +622,7 @@ function setPendingTimer(connectedRealmId, realmState) {
     delete realmQueue.timers[connectedRealmId];
 
     const now = Date.now();
-    const nextCheck = nextCheckTimestamp(realmState);
+    const nextCheck = nextCheckTimestamp(connectedRealmId, realmState);
     if (nextCheck < now) {
         realmQueue.pending.push(connectedRealmId);
 
