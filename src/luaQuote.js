@@ -7,6 +7,43 @@ const replacements = {
 const comma = Buffer.from(',');
 const strConcatStart = Buffer.from('scc(');
 const strConcatEnd = Buffer.from(')');
+const maxArgCount = 200;
+
+/**
+ * Splits list into chunks of size, returning those chunks.
+ *
+ * @param {*[]} list
+ * @param {number} size
+ * @returns {*[][]}
+ */
+const chunkList = (list, size) => {
+    const result = [];
+    for (let i = 0; i < list.length; i += size) {
+        result.push(list.slice(i, i + size));
+    }
+
+    return result;
+};
+
+/**
+ * Returns a new array of items, with commas between elements, and wrapped in a string concat function call.
+ *
+ * @param {Buffer[]} items
+ * @return {Buffer[]}
+ */
+const makeLuaCode = items => {
+    if (items.length < 2) {
+        return [...items];
+    }
+
+    const result = [strConcatStart];
+    for (let i = 0; i < items.length; i++) {
+        result.push(items[i], comma);
+    }
+    result[result.length - 1] = strConcatEnd;
+
+    return result;
+};
 
 /**
  * Wrap a buffer with lua brackets.
@@ -75,13 +112,19 @@ function luaQuote(buf) {
     if (bufStart < buf.length) {
         parts.push(luaBracket(buf.slice(bufStart)));
     }
-    for (let x = 1; x < parts.length; x += 2) {
-        parts.splice(x, 0, comma);
-    }
-    parts.unshift(strConcatStart);
-    parts.push(strConcatEnd);
 
-    return Buffer.concat(parts);
+    while (parts.length > maxArgCount) {
+        const chunks = chunkList(parts, maxArgCount);
+        parts = chunks.slice(0, chunks.length - 1).map(chunk => Buffer.concat(makeLuaCode(chunk)));
+        const lastChunk = chunks[chunks.length - 1];
+        if (parts.length + lastChunk.length < maxArgCount) {
+            parts.push(...lastChunk);
+        } else {
+            parts.push(Buffer.concat(makeLuaCode(lastChunk)));
+        }
+    }
+
+    return Buffer.concat(makeLuaCode(parts));
 }
 
 module.exports = luaQuote;
