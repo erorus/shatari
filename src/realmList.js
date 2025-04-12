@@ -88,6 +88,16 @@ async function fetchRealmList() {
         names: {},
     };
 
+    const POPULATION = {
+        NEW: 1,
+        RECOMMENDED: 2,
+        LOW: 3,
+        MEDIUM: 4,
+        HIGH: 5,
+        FULL: 6,
+        LOCKED: 7,
+    };
+
     const realmPromises = [];
     const seenConnections = {};
 
@@ -107,6 +117,7 @@ async function fetchRealmList() {
                     const realmResult = {
                         region: region,
                         slug: realmRec.slug,
+                        population: POPULATION[response.data.population?.type] ?? 0,
                         id: realmRec.id,
                         connectedId: parseInt(connectedRealmId),
                     };
