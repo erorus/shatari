@@ -29,5 +29,5 @@ module.exports = new function () {
 
     this.ITEM_PET_CAGE = 82800;
 
-    this.LOCALES = ['enus', 'dede', 'eses', 'frfr', 'itit', 'ptbr', 'ruru', 'zhtw', 'kokr'];
+    this.LOCALES = ['enus', 'dede', 'eses', 'frfr', 'itit', 'ptbr', 'ruru', 'zhtw', 'kokr', 'esmx'];
 }
