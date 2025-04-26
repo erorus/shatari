@@ -18,7 +18,7 @@ const CommodityRealm = require('./commodityRealm');
 
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
-const MIN_EXPANSION_ITEM_VARIATIONS = 11;
+const MIN_EXPANSION_ITEM_VARIATIONS = Constants.VARIATION_EXPANSION_CUTOFF;
 const MEDIAN_PRICE_PERIOD = 4 * Constants.MS_DAY;
 
 let realmList;

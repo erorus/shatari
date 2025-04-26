@@ -50,7 +50,7 @@ async function main() {
     aliveness = new Aliveness(MAX_ALIVENESS_DELAY);
 
     if ((process.argv[2] || '') === 'deals') {
-        await initLists();
+        await initLists(process.argv[3]);
         await updateDeals(process.argv[3] || 'us');
 
         aliveness.close();
@@ -164,9 +164,10 @@ async function main() {
 /**
  * Initializes our global list variables.
  *
+ * @param {string|undefined} [region]
  * @return {Promise<void>}
  */
-async function initLists() {
+async function initLists(region) {
     // Get item list
     let listPath = Path.resolve(__dirname, '..', 'items.all.json');
     let listJson = await fs.readFile(listPath);
@@ -174,7 +175,7 @@ async function initLists() {
     Object.values(itemList).forEach(item => currentExpansion = Math.max(currentExpansion || 0, item.expansion || 0));
 
     // Get realm list
-    realmList = await fetchRealmList();
+    realmList = await fetchRealmList(region);
     //realmList = {54: 'us'};
 }
 
@@ -399,7 +400,10 @@ async function updateDeals(region) {
         });
         realmState = null;
     }
-    logMsg(`${region} deals: data collected for ${Object.keys(csvPrices).length} CSV items, ${Object.keys(seenPrices).length} deals items.`);
+    logMsg(`${region} deals: data collected for ` +
+        `${Object.keys(csvPrices).length} CSV items, ` +
+        `${Object.keys(seenPrices).length} deals items, ` +
+        `${Object.keys(availablePrices).length} arbitrage items.`);
 
     // CSV stuff
     {
@@ -436,6 +440,7 @@ async function updateDeals(region) {
         items: {},
     };
     let regionState = {
+        arbitrage: {},
         items: {},
     };
     Object.keys(seenPrices).forEach(itemKey => {
@@ -443,6 +448,20 @@ async function updateDeals(region) {
         if (offered.length) {
             offered.sort((a, b) => a - b);
             regionState.items[itemKey] = getMedian(offered);
+
+            let canArbitrage = true;
+            if (itemKey.itemId !== Constants.ITEM_PET_CAGE) {
+                let parsedKey = ItemKeySerialize.parse(itemKey);
+                if (parsedKey.itemLevel && itemList[parsedKey.itemId]?.expansion < Constants.VARIATION_EXPANSION_CUTOFF) {
+                    canArbitrage = false;
+                }
+            }
+            if (canArbitrage) {
+                regionState.arbitrage[itemKey] = {
+                    realms: offered.length,
+                    min: offered[0],
+                };
+            }
         }
 
         seenPrices[itemKey].sort((a, b) => a - b);
@@ -642,12 +661,16 @@ function setPendingTimer(connectedRealmId, realmState) {
 /**
  * Fetches and returns a full realm list from the API.
  *
+ * @param {string|undefined} [onlyRegion]
  * @return {object}
  */
-async function fetchRealmList() {
+async function fetchRealmList(onlyRegion) {
     const result = {};
 
     for (let region, x = 0; region = regions[x]; x++) {
+        if (onlyRegion && onlyRegion !== region) {
+            continue;
+        }
         logMsg("Fetching " + region + " realm list");
         const response = await api.fetch(region, '/data/wow/connected-realm/index');
         response.data.connected_realms.forEach(realmRec => {

@@ -30,4 +30,7 @@ module.exports = new function () {
     this.ITEM_PET_CAGE = 82800;
 
     this.LOCALES = ['enus', 'dede', 'eses', 'frfr', 'itit', 'ptbr', 'ruru', 'zhtw', 'kokr', 'esmx'];
+
+    // Items from expansions before this value are skipped when being selective about variation inclusion.
+    this.VARIATION_EXPANSION_CUTOFF = 11;
 }
