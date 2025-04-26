@@ -449,14 +449,12 @@ async function updateDeals(region) {
             offered.sort((a, b) => a - b);
             regionState.items[itemKey] = getMedian(offered);
 
-            let canArbitrage = true;
-            if (itemKey.itemId !== Constants.ITEM_PET_CAGE) {
-                let parsedKey = ItemKeySerialize.parse(itemKey);
-                if (parsedKey.itemLevel && itemList[parsedKey.itemId]?.expansion < Constants.VARIATION_EXPANSION_CUTOFF) {
-                    canArbitrage = false;
-                }
-            }
-            if (canArbitrage) {
+            let parsedKey = ItemKeySerialize.parse(itemKey);
+            if (
+                parsedKey.itemId === Constants.ITEM_PET_CAGE ||
+                !parsedKey.itemLevel ||
+                !(itemList[parsedKey.itemId]?.expansion < Constants.VARIATION_EXPANSION_CUTOFF)
+            ) {
                 regionState.arbitrage[itemKey] = {
                     realms: offered.length,
                     min: offered[0],
