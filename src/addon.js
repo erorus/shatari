@@ -524,7 +524,7 @@ async function generateToc() {
 ## Notes: ${notes}
 ## OptionalDeps: Auctionator, AuctionLite, LibExtraTip
 ## SavedVariablesPerCharacter: OETooltipsHidden, OETooltipsSettings
-## Version: 1.1.${yyyymmdd}
+## Version: 1.2.${yyyymmdd}
 ## IconTexture: 3536196
 
 libs\\LibExtraTip\\Load.xml

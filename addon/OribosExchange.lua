@@ -1,6 +1,6 @@
 --[[
 
-Oribos Exchange addon, v 1.1
+Oribos Exchange addon, v 1.2
 https://oribos.exchange/
 
 You should be able to query this DB from other addons:
@@ -516,13 +516,8 @@ SLASH_ORIBOSEXCHANGE1 = '/oetooltip'
 function SlashCmdList.ORIBOSEXCHANGE(msg)
     local lineNames = {
         ['age'] = 'age',
-
         ['market'] = 'market',
-
-        ['globalmedian'] = 'globalMedian',
-        ['global-median'] = 'globalMedian',
-        ['regionmedian'] = 'globalMedian',
-        ['region-median'] = 'globalMedian',
+        ['region'] = 'region',
 
         ['lastseen'] = 'lastSeen',
         ['last-seen'] = 'lastSeen',
@@ -595,7 +590,7 @@ function GetAuctionBuyout(item) -- Tekkub's API
         if (result['market']) then
             return result['market']
         else
-            return result['globalMedian']
+            return result['region']
         end
     end
 
