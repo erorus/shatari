@@ -8,16 +8,40 @@ module.exports = function (maxIntervalParam) {
     let pingbackTimer;
     let retryTimeout;
 
+    let realmPingbackUrl;
+    let realmPingbackSent = Date.now();
+
     this.close = function () {
         clearInterval(timer);
         clearInterval(pingbackTimer);
         clearTimeout(retryTimeout);
     }
 
-    this.checkIn = function () {
+    /**
+     * Registers that we've completed some section of code and are still alive.
+     *
+     * @param {boolean} [processedRealm] True when we've finished processing a realm and should GET the RealmPingback.
+     */
+    this.checkIn = async (processedRealm = false) => {
         lastCheckIn = Date.now();
+
+        if (processedRealm && realmPingbackUrl && (realmPingbackSent + maxInterval < Date.now())) {
+            realmPingbackSent = Date.now();
+            try {
+                await axios({url: realmPingbackUrl, timeout: 10000});
+            } catch (e) {
+                realmPingbackSent -= 10000;
+                console.warn(`Realm check-in failed to load ${realmPingbackUrl}. Will allow next checkin shortly.`);
+            }
+        }
     };
 
+    /**
+     * Sets/clears the URL we GET regularly to notify a service that we're still alive. These pingbacks happen
+     * independently of any checkIn() calls.
+     *
+     * @param {string} url
+     */
     this.setPingback = url => {
         clearInterval(pingbackTimer);
         if (url) {
@@ -38,6 +62,15 @@ module.exports = function (maxIntervalParam) {
             pingback();
             pingbackTimer = setInterval(pingback, maxInterval);
         }
+    };
+
+    /**
+     * Sets/clears the URL we GET when a checkIn() indicates that we've completed processing a realm.
+     *
+     * @param {string|undefined} url
+     */
+    this.setRealmPingback = url => {
+        realmPingbackUrl = url;
     };
 
     function timerCheck() {

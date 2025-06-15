@@ -78,12 +78,8 @@ async function main() {
         process.exit();
     }, MAX_RUN_TIME + 5 * Constants.MS_MINUTE);
 
-    {
-        let alivenessPingback = process.env.ALIVENESS_PINGBACK;
-        if (alivenessPingback) {
-            aliveness.setPingback(alivenessPingback);
-        }
-    }
+    aliveness.setPingback(process.env.ALIVENESS_PINGBACK);
+    aliveness.setRealmPingback(process.env.REALM_PINGBACK);
 
     const clearRealmTimers = () => {
         for (let k in realmQueue.timers) {
@@ -522,7 +518,7 @@ async function checkPendingRealms() {
         }
 
         fillRunning();
-        aliveness.checkIn();
+        aliveness.checkIn(true);
     }
 
     if (processedOne) {
