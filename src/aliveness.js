@@ -9,7 +9,7 @@ module.exports = function (maxIntervalParam) {
     let retryTimeout;
 
     let realmPingbackUrl;
-    let realmPingbackSent = Date.now();
+    let realmPingbackSent = 0;
 
     this.close = function () {
         clearInterval(timer);
