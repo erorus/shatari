@@ -4,5 +4,4 @@
 	<Script file="LibExtraTipHandler_DataProc.lua"/>
 	<Script file="LibExtraTipHandler_HookSet.lua"/>
 	<Script file="LibExtraTip.lua"/>
-	<Script file="LibMoneyFrame.lua"/>
 </Ui>

@@ -629,14 +629,17 @@ local function GenerateTDPHooks()
 	local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
 	local UnitTokenFromGUID = UnitTokenFromGUID
 	local UnitName = UnitName
-	local GetSpellSubtext = C_Spell and C_Spell.GetSpellSubtext or GetSpellSubtext
-	local GetSpellLink = C_Spell and C_Spell.GetSpellLink or GetSpellLink
-	local GetSpellInfo = GetSpellInfo
-	if not GetSpellInfo and C_Spell and C_Spell.GetSpellInfo then
-		local rawGetSpellInfo = C_Spell.GetSpellInfo
+	local GetSpellSubtext = C_Spell.GetSpellSubtext or GetSpellSubtext
+	local GetSpellLink = C_Spell.GetSpellLink or GetSpellLink
+
+	local GetSpellInfo = C_Spell.GetSpellInfo
+	if not GetSpellInfo and _G.GetSpellInfo then -- Unlikely to ever be needed - it seems likely that C_Spell.GetSpellInfo will be migrated to all clients
+		local rawGetSpellInfo = _G.GetSpellInfo
+		local info = {}
 		GetSpellInfo = function(...)
-			local info = rawGetSpellInfo(...)
-			return info.name, nil, info.iconID, info.castTime, info.minRange, info.maxRange, info.spellID, info.originalIconID
+			local name, _, iconID, castTime, minRange, maxRange, spellID, originalIconID = rawGetSpellInfo(...)
+			info.name, info.iconID, info.castTime, info.minRange, info.maxRange, info.spellID, info.originalIconID = name, iconID, castTime, minRange, maxRange, spellID, originalIconID
+			return info
 		end
 	end
 
@@ -721,21 +724,24 @@ local function GenerateTDPHooks()
 		-- fall back to link, if it was set by a gather function, as a last resort
 		if not spell then return end
 
-		local name, _, icon, ctime, minRange, maxRange, spellID = GetSpellInfo(spell)
-		if not (name and spellID) then return end
+		--local name, _, icon, ctime, minRange, maxRange, spellID = GetSpellInfo(spell)
+		local spellinfo = GetSpellInfo(spell)
+		if not spellinfo then return end
+		local spellID = spellinfo.spellID
 		local subtext = GetSpellSubtext(spellID) -- may be nil: spell may not have subtext, also subtext is only loaded on demand (?)
 		local spelllink = GetSpellLink(spellID) -- Caution: this will be a 'spell' type link, even if the spellID relates to a different type (e.g. 'enchant')
 
-		additional.name = name
+		additional.name = spellinfo.name
 		additional.spellID = spellID
 		additional.rank = subtext -- subtext may represent rank or category info depending on Client
 		additional.category = subtext
-		additional.icon = icon
-		additional.castTime = ctime
-		additional.minRange = minRange
-		additional.maxRange = maxRange
+		additional.icon = spellinfo.iconID
+		additional.castTime = spellinfo.castTime
+		additional.minRange = spellinfo.minRange
+		additional.maxRange = spellinfo.maxRange
 		additional.spellLink = spelllink
 		additional.tooltipData = data
+		additional.originalIconID = spellinfo.originalIconID
 
 		ProcessSpell(tooltip, reg)
 	end

@@ -739,6 +739,14 @@ local function GenerateHandlers()
 	local ProcessSpell = private.ProcessSpell
 	local ProcessUnit = private.ProcessUnit
 	local GetItemInfo = C_Item.GetItemInfo or GetItemInfo
+	local GetSpellInfo = GetSpellInfo
+	if not GetSpellInfo and C_Spell.GetSpellInfo then
+		local rawGetSpellInfo = C_Spell.GetSpellInfo
+		GetSpellInfo = function(...)
+			local info = rawGetSpellInfo(...)
+			return info.name, nil, info.iconID, info.castTime, info.minRange, info.maxRange, info.spellID, info.originalIconID
+		end
+	end
 
 	HandlerItem = function(tooltip) -- called from OnTooltipSetItem
 		local testname
