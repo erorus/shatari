@@ -213,6 +213,12 @@ function private.ProcessUnit(tooltip, reg)
 	local additional = reg.additional
 	local name, unitId = additional.name, additional.unitId
 
+	if tooltip:IsAnchoringRestricted() then
+		-- Anchoring restricted frames are usually Nameplates, or apprently tooltips attached to Nameplates
+		-- Our attaching, resizing (and possibly other) functions will cause anchoring restricted errors, so stop here
+		return
+	end
+
 	if not self.sortedCallbacks or #self.sortedCallbacks == 0 then
 		return
 	end
