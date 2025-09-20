@@ -6,7 +6,7 @@ local addonName, addonTable = ...
 local L = addonTable.localization
 
 -- Localization Table (Adaptation of Lua code into Russian ZamestoTV)
-L["Region"] = "Регион"
+L["%s Region"] = "%s Регион"
 L["Regional"] = "Регион"
 L["Realm"] = "Сервер"
 L["Breed %s - Species %s"] = "Порода %s - Вид %s"

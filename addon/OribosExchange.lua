@@ -482,7 +482,7 @@ local function onEvent(self,event,arg)
         elseif not addonTable.marketData then
             print(prettyName .. " - " .. L["Warning: no data loaded!"])
         else
-            regionName = addonTable.region .. " " .. L["Region"]
+            regionName = L["%s Region"]:format(addonTable.region)
             realmName = GetRealmName()
             if not tooltipsEnabled then
                 print(prettyName .. " - " .. L["Tooltip prices disabled. Run %s to enable."]:format("|cFFFFFF78/oetooltip on|r"))
