@@ -41,6 +41,10 @@ This is useful for other addons (Auctioneer, TSM, etc) that have their own fancy
 
 ]]
 
+local addonName, addonTable = ...
+local L = addonTable.localization
+local prettyName = '|cFF33FF99' .. L["Oribos Exchange"] .. '|r'
+
 local floor = math.floor
 local tinsert, tonumber = tinsert, tonumber
 local strLen, strByte, strSub = string.len, string.byte, string.sub
@@ -95,9 +99,6 @@ local function roundToOdd(value)
 
     return floor(value + 0.5)
 end
-
-local addonName, addonTable = ...
-local prettyName = '|cFF33FF99Oribos Exchange|r'
 
 local breedPoints = {
     [3] = {0.5,0.5,0.5,["name"]="B/B"},
@@ -353,8 +354,8 @@ function OETooltip(...)
             local callingName, callingTitle = GetAddOnInfo(line)
             if callingName then
                 callingName = callingTitle or callingName
-                if tooltipsEnabled then line = 'enabled' else line = 'disabled' end
-                print(prettyName .. " - Tooltip prices " .. line .. " by " .. callingName)
+                local status = tooltipsEnabled and L["enabled"] or L["disabled"]
+                print(prettyName .. " - " .. L["Tooltip prices %s by %s"]:format(status, callingName))
             end
         end
     end
@@ -375,15 +376,15 @@ local qualityRGB = {
 }
 
 local LibExtraTip = LibStub("LibExtraTip-1")
-local regionName = "Regional"
-local realmName = "Realm"
+local regionName = L["Regional"]
+local realmName = L["Realm"]
 
 local function buildExtraTip(tooltip, pricingData)
     local r,g,b = .9,.8,.5
 
     if pricingData['breed'] and breedPoints[pricingData['breed']] and qualityRGB[pricingData['quality']] then
         LibExtraTip:AddLine(tooltip,
-            "Breed " .. breedPoints[pricingData['breed']]["name"] .. " - Species " .. pricingData['species'],
+            L["Breed %s - Species %s"]:format(breedPoints[pricingData['breed']]["name"], pricingData['species']),
             qualityRGB[pricingData['quality']][1],
             qualityRGB[pricingData['quality']][2],
             qualityRGB[pricingData['quality']][3],
@@ -393,7 +394,7 @@ local function buildExtraTip(tooltip, pricingData)
     LibExtraTip:AddLine(tooltip," ",r,g,b,true)
 
     if (pricingData['age'] > 3*24*60*60) and not tooltipsSettings['disable-age'] then
-        LibExtraTip:AddLine(tooltip,"As of "..SecondsToTime(pricingData['age'],pricingData['age']>60).." ago:",r,g,b,true)
+        LibExtraTip:AddLine(tooltip,L["As of %s ago:"]:format(SecondsToTime(pricingData['age'],pricingData['age']>60)),r,g,b,true)
     end
 
     if pricingData['market'] and pricingData['market'] > 0 and not tooltipsSettings['disable-market'] then
@@ -406,11 +407,11 @@ local function buildExtraTip(tooltip, pricingData)
 
     if not tooltipsSettings['disable-lastSeen'] then
         if pricingData['days'] == 252 then
-            LibExtraTip:AddLine(tooltip,"Sold by Vendors",r,g,b,true)
+            LibExtraTip:AddLine(tooltip,L["Sold by Vendors"],r,g,b,true)
         elseif pricingData['days'] > 250 then
-            LibExtraTip:AddLine(tooltip,"Last seen over 250 days ago",r,g,b,true)
+            LibExtraTip:AddLine(tooltip,L["Last seen over 250 days ago"],r,g,b,true)
         elseif pricingData['days'] > 1 then
-            LibExtraTip:AddLine(tooltip,"Last seen "..SecondsToTime(pricingData['days']*24*60*60).." ago",r,g,b,true)
+            LibExtraTip:AddLine(tooltip,L["Last seen %s ago"]:format(SecondsToTime(pricingData['days']*24*60*60)),r,g,b,true)
         end
     end
 end
@@ -418,23 +419,23 @@ end
 local function printHelp()
     local function getLineStatus(lineName)
         if tooltipsSettings['disable-' .. lineName] then
-            return '(|cFFFF0000OFF|r)'
+            return '(|cFFFF0000' .. L["OFF"] .. '|r)'
         else
-            return '(|cFF00FF00ON|r)'
+            return '(|cFF00FF00' .. L["ON"] .. '|r)'
         end
     end
 
-    local regionName = addonTable.region or "Regional"
+    local regionName = addonTable.region or L["Regional"]
 
-    print(prettyName .. " - Arguments for |cFFFFFF78/oetooltip|r are:")
-    print("|cFFFFFF78on|r|||cFFFFFF78off|r - Enable/disable tooltip modifications.")
-    print("|cFFFFFF78reset|r - Reset all preferences and enable all lines.")
-    print("|cFFFFFF78coins|r - Toggle displaying coin prices.")
-    print("|cFFFFFF78quiet|r - Disable all lines.")
-    print("|cFFFFFF78age|r - Toggle data age line. " .. getLineStatus('age'))
-    print("|cFFFFFF78market|r - Toggle realm price line. " .. getLineStatus('market'))
-    print("|cFFFFFF78region|r - Toggle " .. regionName .. " median line. " .. getLineStatus('region'))
-    print("|cFFFFFF78lastseen|r - Toggle 'Last seen' line. " .. getLineStatus('lastSeen'))
+    print(prettyName .. " - " .. L["Arguments for %s are:"]:format("|cFFFFFF78/oetooltip|r"))
+    print("|cFFFFFF78on|r|||cFFFFFF78off|r - " .. L["Enable/disable tooltip modifications."])
+    print("|cFFFFFF78reset|r - " .. L["Reset all preferences and enable all lines."])
+    print("|cFFFFFF78coins|r - " .. L["Toggle displaying coin prices."])
+    print("|cFFFFFF78quiet|r - " .. L["Disable all lines."])
+    print("|cFFFFFF78age|r - " .. L["Toggle data age line."] .. " " .. getLineStatus('age'))
+    print("|cFFFFFF78market|r - " .. L["Toggle realm price line."] .. " " .. getLineStatus('market'))
+    print("|cFFFFFF78region|r - " .. L["Toggle %s median line."]:format(regionName) .. " " .. getLineStatus('region'))
+    print("|cFFFFFF78lastseen|r - " .. L["Toggle 'Last seen' line."] .. " " .. getLineStatus('lastSeen'))
 end
 
 local dataResults = {}
@@ -477,14 +478,14 @@ local function onEvent(self,event,arg)
         collectgarbage("collect") -- lots of strings made and trunc'ed in MarketData
 
         if not addonTable.realmIndex then
-            print(prettyName .. " - Warning: could not find data for realm ID "..realmId..", no data loaded!")
+            print(prettyName .. " - " .. L["Warning: could not find data for realm ID %s, no data loaded!"]:format(realmId))
         elseif not addonTable.marketData then
-            print(prettyName .. " - Warning: no data loaded!")
+            print(prettyName .. " - " .. L["Warning: no data loaded!"])
         else
-            regionName = addonTable.region .. " Region"
+            regionName = addonTable.region .. " " .. L["Region"]
             realmName = GetRealmName()
             if not tooltipsEnabled then
-                print(prettyName .. " - Tooltip prices disabled. Run |cFFFFFF78/oetooltip on|r to enable.")
+                print(prettyName .. " - " .. L["Tooltip prices disabled. Run %s to enable."]:format("|cFFFFFF78/oetooltip on|r"))
             end
             LibExtraTip:AddCallback({type = "item", callback = onTooltipSetItem})
             LibExtraTip:AddCallback({type = "battlepet", callback = onTooltipSetItem})
@@ -528,7 +529,7 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
     if msg == 'reset' then
         wipe(tooltipsSettings)
         OETooltip(true)
-        print(prettyName .. " - Preferences reset to defaults.")
+        print(prettyName .. " - " .. L["Preferences reset to defaults."])
 
         return
     end
@@ -537,7 +538,7 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
             local settingName = 'disable-' .. lineName
             tooltipsSettings[settingName] = true
         end
-        print(prettyName .. " - All lines disabled.")
+        print(prettyName .. " - " .. L["All lines disabled."])
 
         return
     end
@@ -545,11 +546,11 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
         local lineName = lineNames[loweredMsg]
         local settingName = 'disable-' .. lineName
         if tooltipsSettings[settingName] then
-            tooltipsSettings[settingName] = nil;
-            print(prettyName .. " - |cFFFFFF78" .. lineName .. "|r line enabled.")
+            tooltipsSettings[settingName] = nil
+            print(prettyName .. " - " .. L["%s line enabled."]:format("|cFFFFFF78" .. lineName .. "|r"))
         else
-            tooltipsSettings[settingName] = true;
-            print(prettyName .. " - |cFFFFFF78" .. lineName .. "|r line disabled.")
+            tooltipsSettings[settingName] = true
+            print(prettyName .. " - " .. L["%s line disabled."]:format("|cFFFFFF78" .. lineName .. "|r"))
         end
 
         return
@@ -557,23 +558,23 @@ function SlashCmdList.ORIBOSEXCHANGE(msg)
     if msg == 'coins' then
         if tooltipsSettings['coins'] then
             tooltipsSettings['coins'] = nil
-            print(prettyName .. " - Coins display disabled.")
+            print(prettyName .. " - " .. L["Coins display disabled."])
         else
-            tooltipsSettings['coins'] = true;
-            print(prettyName .. " - Coins display enabled.")
+            tooltipsSettings['coins'] = true
+            print(prettyName .. " - " .. L["Coins display enabled."])
         end
 
         return
     end
     if msg == 'on' then
         OETooltip(true)
-        print(prettyName .. " - Tooltip additions enabled.")
+        print(prettyName .. " - " .. L["Tooltip additions enabled."])
 
         return
     end
     if msg == 'off' then
         OETooltip(false)
-        print(prettyName .. " - Tooltip additions disabled.")
+        print(prettyName .. " - " .. L["Tooltip additions disabled."])
 
         return
     end
