@@ -703,16 +703,6 @@ async function processConnectedRealm(connectedRealmId) {
     logMsg("Starting", connectedRealmId);
 
     const realmState = await RealmState.get(connectedRealmId);
-    if (realmState.hasOwnProperty('locked')) {
-        const now = Date.now();
-        logMsg("Locked since " + Math.round((now - realmState.locked) / Constants.MS_MINUTE) + " minutes ago.", connectedRealmId);
-        if (realmState.locked > (now - 2 * Constants.MS_HOUR)) {
-            return;
-        }
-        logMsg("Ignoring lock.", connectedRealmId);
-    }
-    realmState.locked = Date.now();
-    await RealmState.put(connectedRealmId, realmState);
 
     let headers = {};
     let lastSnapshot = realmState.snapshot;
@@ -743,7 +733,6 @@ async function processConnectedRealm(connectedRealmId) {
             items = results.stats;
             bonusStatItems = results.bonusStatItems;
         } catch (error) {
-            delete realmState.locked;
             await RealmState.put(connectedRealmId, realmState);
 
             setPendingTimer(connectedRealmId, realmState);
@@ -790,7 +779,6 @@ async function processConnectedRealm(connectedRealmId) {
         logMsg("Downloaded no new data in " + (requestTime / Constants.MS_SEC) + ` seconds since ${lastModified}`, connectedRealmId);
     }
 
-    delete realmState.locked;
     await RealmState.put(connectedRealmId, realmState);
 
     setPendingTimer(connectedRealmId, realmState);
