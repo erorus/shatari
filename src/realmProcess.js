@@ -1,5 +1,3 @@
-const Path = require('path');
-const fs = require('fs').promises;
 const process = require('process');
 const dateFormat = require('dateformat');
 
@@ -9,10 +7,7 @@ const ItemKey = require('./itemKey');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
 const Runner = require('./runner');
-const ShatariWriter = require('./shatariWriter');
 const RealmState = require("./realmState");
-
-const DATA_DIR = Constants.DATA_DIR;
 
 const CONCURRENT_ITEM_LIMIT = 8;
 
@@ -53,13 +48,16 @@ const realmProcess = new function () {
         const stats = {};
         const bonusStatItems = {};
 
+        const summaryLastSeen = {};
         const itemKeysToUpdate = new Set();
         {
             const realmState = await RealmState.get(connectedRealmId);
             realmState.summary ??= {};
             for (let itemKeyString in realmState.summary) {
                 const [snapshot, price, quantity] = realmState.summary[itemKeyString];
-                if (quantity > 0) {
+                summaryLastSeen[itemKeyString] = snapshot;
+                //if (quantity > 0) { // TODO: revert after all got updated
+                {
                     itemKeysToUpdate.add(itemKeyString);
                 }
             }
@@ -169,11 +167,16 @@ const realmProcess = new function () {
             aliveness.checkIn();
 
             stats[itemKey] ??= {};
-            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
+            running.push(Runner.wrap(updateRealmItem(
+                connectedRealmId,
+                itemKey,
+                thisSnapshot,
+                summaryLastSeen[itemKey] ?? thisSnapshot,
+                stats[itemKey],
+            )));
         }
         await Promise.all(running);
 
-        //logMsg("returning " + Object.keys(stats).length + " results", connectedRealmId);
         const results = {
             stats: stats,
             bonusStatItems: {},
@@ -190,9 +193,10 @@ const realmProcess = new function () {
      * @param {number} connectedRealmId
      * @param {string} itemKey
      * @param {number} thisSnapshot
+     * @param {number} lastSeenSnapshot
      * @param {object} stats
      */
-    async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
+    async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, lastSeenSnapshot, stats) {
         const itemState = await ItemState.get(connectedRealmId, itemKey);
 
         itemState.auctions = [];
@@ -208,7 +212,7 @@ const realmProcess = new function () {
 
         itemState.price = stats.p = stats.p || itemState.price;
         itemState.quantity = stats.q = stats.q || 0;
-        itemState.snapshot = thisSnapshot;
+        itemState.snapshot = stats.q > 0 ? thisSnapshot : lastSeenSnapshot;
 
         itemState.snapshots = itemState.snapshots || [];
         itemState.snapshots.push([itemState.snapshot, itemState.price, itemState.quantity]);
