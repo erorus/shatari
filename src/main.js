@@ -22,7 +22,7 @@ const ShatariWriter = require('./shatariWriter');
 const api = new BNet();
 const regions = [api.REGION_US, api.REGION_EU, api.REGION_TW, api.REGION_KR];
 
-const CONCURRENT_REALM_LIMIT = 4;
+const CONCURRENT_REALM_LIMIT = 2;
 
 const DEALS_INTERVAL = 30 * Constants.MS_MINUTE;
 const BOUND_ITEMS_INTERVAL = 2 * Constants.MS_HOUR;
