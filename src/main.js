@@ -741,13 +741,16 @@ async function processConnectedRealm(connectedRealmId) {
         }
 
         realmState.snapshot = thisSnapshot;
-        realmState.summary = realmState.summary || {};
+        realmState.summary ??= {};
         for (let itemKey in items) {
             if (!items.hasOwnProperty(itemKey)) {
                 continue;
             }
 
-            realmState.summary[itemKey] = [thisSnapshot, items[itemKey].p, items[itemKey].q];
+            const lastSeen = items[itemKey].q > 0 ?
+                thisSnapshot :
+                (realmState.summary[itemKey]?.[0] ?? thisSnapshot);
+            realmState.summary[itemKey] = [lastSeen, items[itemKey].p, items[itemKey].q];
         }
 
         const tooOld = thisSnapshot - Constants.MAX_HISTORY;

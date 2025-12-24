@@ -10,6 +10,7 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
 const Runner = require('./runner');
 const ShatariWriter = require('./shatariWriter');
+const RealmState = require("./realmState");
 
 const DATA_DIR = Constants.DATA_DIR;
 
@@ -52,8 +53,17 @@ const realmProcess = new function () {
         const stats = {};
         const bonusStatItems = {};
 
-        const priorAuctions = await getPriorAuctionList(connectedRealmId);
-        const currentAuctions = {};
+        const itemKeysToUpdate = new Set();
+        {
+            const realmState = await RealmState.get(connectedRealmId);
+            realmState.summary ??= {};
+            for (let itemKeyString in realmState.summary) {
+                const [snapshot, price, quantity] = realmState.summary[itemKeyString];
+                if (quantity > 0) {
+                    itemKeysToUpdate.add(itemKeyString);
+                }
+            }
+        }
 
         const petKeysToModifiers = {
             pet_quality_id: Constants.MODIFIER_BATTLE_PET_QUALITY,
@@ -76,15 +86,11 @@ const realmProcess = new function () {
                 return;
             }
 
-            const auctionKey = [auction.id, quantity].join('-');
-            let auctionListItemKey;
-
             // Simple (transmog mode) stats, in the auc array.
             {
                 const itemKey = itemData['class'] === Constants.CLASS_BATTLE_PET ?
                     ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: auction.item.pet_species_id || 0}) :
                     ItemKeySerialize.stringify({itemId: itemId, itemSuffix: 0, itemLevel: 0});
-                auctionListItemKey = itemKey;
                 if (!stats[itemKey]) {
                     stats[itemKey] = {
                         p: 0,
@@ -92,6 +98,7 @@ const realmProcess = new function () {
                         auc: {},
                     };
                 }
+                itemKeysToUpdate.add(itemKey);
 
                 const item = stats[itemKey];
                 if (!item.p || item.p > price) {
@@ -105,7 +112,6 @@ const realmProcess = new function () {
             // Specifics for equipment and battle pets.
             if (Constants.CLASSES_WITH_SPECIFICS.includes(itemData['class'])) {
                 const itemKeyFull = ItemKeySerialize.stringify(ItemKey.get(auction.item));
-                auctionListItemKey = itemKeyFull;
                 if (!stats[itemKeyFull]) {
                     stats[itemKeyFull] = {
                         p: 0,
@@ -113,6 +119,7 @@ const realmProcess = new function () {
                         specifics: [],
                     };
                 }
+                itemKeysToUpdate.add(itemKeyFull);
 
                 const item = stats[itemKeyFull];
                 if (!item.p || item.p > price) {
@@ -147,64 +154,22 @@ const realmProcess = new function () {
                 ItemKey.getBonusStats(auction.item)
                     .forEach(statId => bonusStatItems[statId] = (bonusStatItems[statId] || new Set()).add(itemKeyFull));
             }
-
-            currentAuctions[auctionKey] = auctionListItemKey;
         });
 
         aliveness.checkIn();
 
-        const itemKeysToUpdate = {};
-        const notInBoth = function (a, b) {
-            for (let auctionKey in a) {
-                if (a.hasOwnProperty(auctionKey) && !b.hasOwnProperty(auctionKey)) {
-                    let itemKeyString = a[auctionKey];
-                    itemKeysToUpdate[itemKeyString] = true;
-
-                    // Include transmog mode.
-                    let parsed = ItemKeySerialize.parse(itemKeyString);
-                    if (parsed.itemSuffix || parsed.itemLevel) {
-                        itemKeyString = ItemKeySerialize.stringify({
-                            itemId: parsed.itemId,
-                            itemLevel: (
-                                    itemList[parsed.itemId] &&
-                                    (itemList[parsed.itemId]['class'] === Constants.CLASS_BATTLE_PET)
-                                ) ? parsed.itemLevel : 0,
-                            itemSuffix: 0,
-                        });
-                        itemKeysToUpdate[itemKeyString] = true;
-                    }
-                }
-            }
-        };
-        notInBoth(priorAuctions, currentAuctions);
-        notInBoth(currentAuctions, priorAuctions);
-
-        aliveness.checkIn();
-
-        logMsg("found " + Object.keys(itemKeysToUpdate).length + " items to update", connectedRealmId);
-
-        /*
-        logMsg(
-            "processing " + data.auctions.length + " auctions and saving " + Object.keys(stats).length +
-            " items from " + dateFormat(new Date(thisSnapshot), 'UTC:HH:MM:ss') + '.',
-            connectedRealmId
-        );
-        */
+        logMsg("found " + itemKeysToUpdate.size + " items to update", connectedRealmId);
 
         let running = [];
-        running.push(Runner.wrap(putPriorAuctionList(connectedRealmId, currentAuctions)));
-        for (let itemKey in itemKeysToUpdate) {
-            if (!itemKeysToUpdate.hasOwnProperty(itemKey)) {
-                continue;
-            }
-
+        for (const itemKey of itemKeysToUpdate) {
             while (running.length >= CONCURRENT_ITEM_LIMIT) {
                 await Runner.waitForOne(running);
             }
 
             aliveness.checkIn();
 
-            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey] || {})));
+            stats[itemKey] ??= {};
+            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
         }
         await Promise.all(running);
 
@@ -220,40 +185,6 @@ const realmProcess = new function () {
     }
 
     /**
-     * @param {number} connectedRealmId
-     * @return {Promise<object>}
-     */
-    async function getPriorAuctionList(connectedRealmId) {
-        const path = Path.resolve(DATA_DIR, '' + connectedRealmId, 'auctionItems.json');
-
-        let data;
-        try {
-            data = await fs.readFile(path);
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                return [];
-            }
-
-            throw error;
-        }
-
-        return JSON.parse(data);
-    }
-
-    /**
-     * @param {number} connectedRealmId
-     * @param {object} list
-     * @return {Promise<void>}
-     */
-    async function putPriorAuctionList(connectedRealmId, list) {
-        const path = Path.resolve(DATA_DIR, '' + connectedRealmId, 'auctionItems.json');
-
-        const json = JSON.stringify(list);
-
-        await ShatariWriter(path, json);
-    }
-
-    /**
      * Updates the individual realm's item state file for the given realm+item and the given stats.
      *
      * @param {number} connectedRealmId
@@ -265,18 +196,18 @@ const realmProcess = new function () {
         const itemState = await ItemState.get(connectedRealmId, itemKey);
 
         itemState.auctions = [];
-        stats.auc = stats.auc || {};
-        for (let price in stats.auc) {
-            if (!stats.auc.hasOwnProperty(price)) {
+        const auc = stats.auc || {};
+        for (let price in auc) {
+            if (!auc.hasOwnProperty(price)) {
                 continue;
             }
-            itemState.auctions.push([parseInt(price), stats.auc[price]]);
+            itemState.auctions.push([parseInt(price), auc[price]]);
         }
 
         itemState.specifics = stats.specifics || [];
 
-        itemState.price = stats.p || itemState.price;
-        itemState.quantity = stats.q || 0;
+        itemState.price = stats.p = stats.p || itemState.price;
+        itemState.quantity = stats.q = stats.q || 0;
         itemState.snapshot = thisSnapshot;
 
         itemState.snapshots = itemState.snapshots || [];
