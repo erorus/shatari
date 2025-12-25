@@ -215,7 +215,7 @@ const realmProcess = new function () {
         itemState.snapshot = stats.q > 0 ? thisSnapshot : lastSeenSnapshot;
 
         itemState.snapshots = itemState.snapshots || [];
-        itemState.snapshots.push([itemState.snapshot, itemState.price, itemState.quantity]);
+        itemState.snapshots.push([thisSnapshot, itemState.price, itemState.quantity]);
 
         let foundFirstTooOld = false;
         for (let index = itemState.snapshots.length - 1; index >= 0; index--) {
@@ -230,7 +230,7 @@ const realmProcess = new function () {
         }
 
         itemState.daily = itemState.daily || [];
-        let todayTimestamp = Math.floor(itemState.snapshot / Constants.MS_DAY) * Constants.MS_DAY;
+        let todayTimestamp = Math.floor(thisSnapshot / Constants.MS_DAY) * Constants.MS_DAY;
         let todayState = [todayTimestamp, itemState.price, itemState.quantity];
         let foundToday = false;
         let needsSort = false;
