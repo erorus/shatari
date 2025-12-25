@@ -48,14 +48,12 @@ const realmProcess = new function () {
         const stats = {};
         const bonusStatItems = {};
 
-        const summaryLastSeen = {};
         const itemKeysToUpdate = new Set();
         {
             const realmState = await RealmState.get(connectedRealmId);
             realmState.summary ??= {};
             for (let itemKeyString in realmState.summary) {
                 const [snapshot, price, quantity] = realmState.summary[itemKeyString];
-                summaryLastSeen[itemKeyString] = snapshot;
                 if (quantity > 0) {
                     itemKeysToUpdate.add(itemKeyString);
                 }
@@ -166,13 +164,7 @@ const realmProcess = new function () {
             aliveness.checkIn();
 
             stats[itemKey] ??= {};
-            running.push(Runner.wrap(updateRealmItem(
-                connectedRealmId,
-                itemKey,
-                thisSnapshot,
-                summaryLastSeen[itemKey] ?? thisSnapshot,
-                stats[itemKey],
-            )));
+            running.push(Runner.wrap(updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats[itemKey])));
         }
         await Promise.all(running);
 
@@ -192,10 +184,9 @@ const realmProcess = new function () {
      * @param {number} connectedRealmId
      * @param {string} itemKey
      * @param {number} thisSnapshot
-     * @param {number} lastSeenSnapshot
      * @param {object} stats
      */
-    async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, lastSeenSnapshot, stats) {
+    async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
         const itemState = await ItemState.get(connectedRealmId, itemKey);
 
         itemState.auctions = [];
@@ -211,7 +202,7 @@ const realmProcess = new function () {
 
         itemState.price = stats.p = stats.p || itemState.price;
         itemState.quantity = stats.q = stats.q || 0;
-        itemState.snapshot = stats.q > 0 ? thisSnapshot : lastSeenSnapshot;
+        itemState.snapshot = stats.q > 0 ? thisSnapshot : (itemState.snapshot ?? thisSnapshot);
 
         itemState.snapshots = itemState.snapshots || [];
         itemState.snapshots.push([thisSnapshot, itemState.price, itemState.quantity]);
