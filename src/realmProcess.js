@@ -187,7 +187,6 @@ const realmProcess = new function () {
         logMsg("found " + itemKeysToUpdate.size + " items to update", connectedRealmId);
 
         let running = [];
-        running.push(Runner.wrap(putPriorAuctionsMap(connectedRealmId, curAucMap)));
         for (const itemKey of itemKeysToUpdate) {
             while (running.length >= CONCURRENT_ITEM_LIMIT) {
                 await Runner.waitForOne(running);
@@ -206,6 +205,8 @@ const realmProcess = new function () {
         };
         Object.keys(bonusStatItems)
             .forEach(statKey => results.bonusStatItems[statKey] = Array.from(bonusStatItems[statKey].values()));
+
+        await putPriorAuctionsMap(connectedRealmId, curAucMap);
 
         return results;
     }
