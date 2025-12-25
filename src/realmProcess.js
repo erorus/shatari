@@ -56,8 +56,7 @@ const realmProcess = new function () {
             for (let itemKeyString in realmState.summary) {
                 const [snapshot, price, quantity] = realmState.summary[itemKeyString];
                 summaryLastSeen[itemKeyString] = snapshot;
-                //if (quantity > 0) { // TODO: revert after all got updated
-                {
+                if (quantity > 0) {
                     itemKeysToUpdate.add(itemKeyString);
                 }
             }
