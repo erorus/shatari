@@ -1,3 +1,5 @@
+const Path = require('path');
+const fs = require('fs').promises;
 const process = require('process');
 const dateFormat = require('dateformat');
 
@@ -8,6 +10,9 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const ItemState = require('./itemState');
 const Runner = require('./runner');
 const RealmState = require("./realmState");
+const ShatariWriter = require('./shatariWriter');
+
+const DATA_DIR = Constants.DATA_DIR;
 
 const CONCURRENT_ITEM_LIMIT = 8;
 
@@ -48,18 +53,6 @@ const realmProcess = new function () {
         const stats = {};
         const bonusStatItems = {};
 
-        const itemKeysToUpdate = new Set();
-        {
-            const realmState = await RealmState.get(connectedRealmId);
-            realmState.summary ??= {};
-            for (let itemKeyString in realmState.summary) {
-                const [snapshot, price, quantity] = realmState.summary[itemKeyString];
-                if (quantity > 0) {
-                    itemKeysToUpdate.add(itemKeyString);
-                }
-            }
-        }
-
         const petKeysToModifiers = {
             pet_quality_id: Constants.MODIFIER_BATTLE_PET_QUALITY,
             pet_breed_id: Constants.MODIFIER_BATTLE_PET_BREED,
@@ -67,7 +60,9 @@ const realmProcess = new function () {
             pet_species_id: Constants.MODIFIER_BATTLE_PET_SPECIES,
         };
 
-        (data.auctions || []).forEach(function (auction) {
+        const curAucMap = {};
+
+        (data.auctions || []).sort((a, b) => a.id - b.id).forEach(auction => {
             const itemId = auction.item.id;
             const itemData = itemList[itemId];
             if (!itemData) {
@@ -81,6 +76,8 @@ const realmProcess = new function () {
                 return;
             }
 
+            const aucKey = `${auction.id.toString(36)}-${quantity},`;
+
             // Simple (transmog mode) stats, in the auc array.
             {
                 const itemKey = itemData['class'] === Constants.CLASS_BATTLE_PET ?
@@ -93,7 +90,8 @@ const realmProcess = new function () {
                         auc: {},
                     };
                 }
-                itemKeysToUpdate.add(itemKey);
+                curAucMap[itemKey] ??= '';
+                curAucMap[itemKey] += aucKey;
 
                 const item = stats[itemKey];
                 if (!item.p || item.p > price) {
@@ -114,7 +112,8 @@ const realmProcess = new function () {
                         specifics: [],
                     };
                 }
-                itemKeysToUpdate.add(itemKeyFull);
+                curAucMap[itemKeyFull] ??= '';
+                curAucMap[itemKeyFull] += aucKey;
 
                 const item = stats[itemKeyFull];
                 if (!item.p || item.p > price) {
@@ -153,9 +152,42 @@ const realmProcess = new function () {
 
         aliveness.checkIn();
 
+        const prevAucMap = await getPriorAuctionsMap(connectedRealmId);
+        const isEmptyObj = obj => {
+            for (const _ in obj) {
+                if (Object.hasOwn(obj, _)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (isEmptyObj(prevAucMap)) {
+            const realmState = await RealmState.get(connectedRealmId);
+            realmState.summary ??= {};
+            for (let itemKeyString in realmState.summary) {
+                const [snapshot, price, quantity] = realmState.summary[itemKeyString];
+                if (quantity > 0) {
+                    prevAucMap[itemKeyString] = '';
+                }
+            }
+        }
+
+        const itemKeysToUpdate = new Set();
+        Object.keys(curAucMap).forEach(itemKeyString => {
+            if (curAucMap[itemKeyString] === prevAucMap[itemKeyString]) {
+                delete prevAucMap[itemKeyString];
+            } else {
+                itemKeysToUpdate.add(itemKeyString);
+            }
+        });
+        Object.keys(prevAucMap).forEach(itemKeyString => itemKeysToUpdate.add(itemKeyString));
+
+        aliveness.checkIn();
+
         logMsg("found " + itemKeysToUpdate.size + " items to update", connectedRealmId);
 
         let running = [];
+        running.push(Runner.wrap(putPriorAuctionsMap(connectedRealmId, curAucMap)));
         for (const itemKey of itemKeysToUpdate) {
             while (running.length >= CONCURRENT_ITEM_LIMIT) {
                 await Runner.waitForOne(running);
@@ -176,6 +208,40 @@ const realmProcess = new function () {
             .forEach(statKey => results.bonusStatItems[statKey] = Array.from(bonusStatItems[statKey].values()));
 
         return results;
+    }
+
+    /**
+     * @param {number} connectedRealmId
+     * @return {Promise<object>}
+     */
+    async function getPriorAuctionsMap(connectedRealmId) {
+        const path = Path.resolve(DATA_DIR, '' + connectedRealmId, 'auctionsMap.json');
+
+        let data;
+        try {
+            data = await fs.readFile(path);
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                return {};
+            }
+
+            throw error;
+        }
+
+        return JSON.parse(data);
+    }
+
+    /**
+     * @param {number} connectedRealmId
+     * @param {object} list
+     * @return {Promise<void>}
+     */
+    async function putPriorAuctionsMap(connectedRealmId, list) {
+        const path = Path.resolve(DATA_DIR, '' + connectedRealmId, 'auctionsMap.json');
+
+        const json = JSON.stringify(list);
+
+        await ShatariWriter(path, json);
     }
 
     /**
