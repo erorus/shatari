@@ -181,7 +181,7 @@ local getterGatherdata
 
 local function GenerateGatherdata()
 	-- Locals to be used as Upvalues
-	local GetMerchantItemInfo = GetMerchantItemInfo
+	local GetMerchantItemInfo = C_MerchantFrame and C_MerchantFrame.GetItemInfo or GetMerchantItemInfo
 	local GetContainerItemInfo = C_Container.GetContainerItemInfo
 	local GetInventoryItemLink = GetInventoryItemLink
 	local GetInventoryItemCount = GetInventoryItemCount
@@ -214,7 +214,7 @@ local function GenerateGatherdata()
 		GetMerchantItem = function(reg, getterArgs)
 			local index = getterArgs[1]
 			local additional = reg.additional
-			local _,_,p,q,na,cu,ec = GetMerchantItemInfo(index)
+			local _,_,p,q,na,_,cu,ec = GetMerchantItemInfo(index)
 			additional.quantity = q
 			additional.event = "SetMerchantItem"
 			additional.eventIndex = index
