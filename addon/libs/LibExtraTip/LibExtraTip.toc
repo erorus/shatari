@@ -1,7 +1,7 @@
 ## Title: LibExtraTip |cff224477(lib)
 ## Notes: Assists in the management of additional tooltip information.
 ##
-## Interface: 110002, 40400, 11504
+## Interface: 120000, 120001, 50503, 11508
 ## LoadOnDemand: 0
 ##
 ## Version: <%version%> (<%codename%>)

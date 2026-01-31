@@ -181,11 +181,20 @@ local getterGatherdata
 
 local function GenerateGatherdata()
 	-- Locals to be used as Upvalues
-	local GetMerchantItemInfo = C_MerchantFrame and C_MerchantFrame.GetItemInfo or GetMerchantItemInfo
+	local GetMerchantItemInfo = GetMerchantItemInfo
+	if C_MerchantFrame and C_MerchantFrame.GetItemInfo then -- ### hybrid : it appears Classic MoP uses DataProc and still needs old GetMerchantItemInfo
+		GetMerchantItemInfo = function(index)
+			local info = C_MerchantFrame.GetItemInfo(index)
+			if info then
+				return info.name, info.texture, info.price, info.stackCount, info.numAvailable, info.isPurchasable, info.isUsable, info.hasExtendedCost, info.currencyID
+			end
+		end
+	end
+	local GetMerchantItemLink = GetMerchantItemLink
 	local GetContainerItemInfo = C_Container.GetContainerItemInfo
 	local GetInventoryItemLink = GetInventoryItemLink
 	local GetInventoryItemCount = GetInventoryItemCount
-	local GetRecipeFixedReagentItemLink = C_TradeSkillUI.GetRecipeFixedReagentItemLink
+	-- local GetRecipeFixedReagentItemLink = C_TradeSkillUI.GetRecipeFixedReagentItemLink -- ### removed in 12.0.0, see GetRecipeReagentItem below
 	local GetInboxItemInfo = GetInboxItem -- local name changed to avoid conflict with Getter name
 	local GetSendMailItemInfo = GetSendMailItem
 	local GetTradePlayerItemInfo = GetTradePlayerItemInfo
@@ -214,7 +223,7 @@ local function GenerateGatherdata()
 		GetMerchantItem = function(reg, getterArgs)
 			local index = getterArgs[1]
 			local additional = reg.additional
-			local _,_,p,q,na,_,cu,ec = GetMerchantItemInfo(index)
+			local _,_,p,q,na,cp,cu,ec,cID = GetMerchantItemInfo(index)
 			additional.quantity = q
 			additional.event = "SetMerchantItem"
 			additional.eventIndex = index
@@ -222,6 +231,7 @@ local function GenerateGatherdata()
 			additional.numAvailable = na
 			additional.canUse = cu
 			additional.extendedCost = ec
+			additional.currencyID = cID
 			additional.link = GetMerchantItemLink(index)
 		end,
 
@@ -261,8 +271,8 @@ local function GenerateGatherdata()
 			end
 			--]]
 
-			additional.link = GetRecipeFixedReagentItemLink(recipeID, reagentIndex)
-			-- ### todo: handle 'quality' reagents uing C_TradeSkillUI.GetRecipeQualityReagentItemLink(recipeID, dataSlotIndex, qualityIndex)
+			-- additional.link = GetRecipeFixedReagentItemLink(recipeID, reagentIndex) -- ### GetRecipeFixedReagentItemLink removed in 12.0.0
+			-- ### todo: find another way to get a link
 		end,
 
 		-- GetVoidItem
