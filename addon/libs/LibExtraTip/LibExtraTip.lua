@@ -65,6 +65,9 @@ local LIBSTRING = versions.LIBNAME.."_"..versions.MAJOR.."_"..versions.MINOR
 -- Forward definition of locals that get defined later in the load process
 local ExtraTipClass
 
+-- Special handling function
+local issecretvalue = issecretvalue or function() end -- if issecretvalue doesn't exist use the empty function -- ### hybrid support for different WoW clients
+
 --[[ The following events are enabled by default unless disabled in the
 	callback options "enabled" table all other events are default disabled.
 	Note that this only applies to events that will lead to calling ProcessCallbacks,
@@ -214,8 +217,9 @@ function private.ProcessUnit(tooltip, reg)
 	local name, unitId = additional.name, additional.unitId
 
 	if tooltip:IsAnchoringRestricted() then
-		-- Anchoring restricted frames are usually Nameplates, or apprently tooltips attached to Nameplates
-		-- Our attaching, resizing (and possibly other) functions will cause anchoring restricted errors, so stop here
+		-- Anchoring restricted frames are usually Nameplates. This prevents calling GetPoint or GetRect
+		-- Anchoring to this object is possible but could cause unexpected errors
+		-- For safety we will stop here
 		return
 	end
 
@@ -1151,7 +1155,12 @@ do -- ExtraTip "class" definition
 		self:SetParent(tooltip)
 		self:SetOwner(tooltip,"ANCHOR_NONE")
 		local parentPoint = tooltip:GetPoint(1)
-		local attach = attachPointsLookup[parentPoint] or pointsRight
+		local attach
+		if issecretvalue(parentPoint) then
+			attach = pointsCentre
+		else
+			attach = attachPointsLookup[parentPoint] or pointsCentre
+		end
 		self:SetPoint(attach[1], tooltip, attach[2])
 	end
 
@@ -1159,6 +1168,7 @@ do -- ExtraTip "class" definition
 		if self.parent then self:SetParentClamp(0) end
 		self.parent = nil
 		self:SetParent(nil)
+		self:ClearAllPoints()
 		self.inMatchSize = nil
 	end
 
@@ -1244,6 +1254,11 @@ do -- ExtraTip "class" definition
 		if not p then return end
 		local reg = lib.tooltipRegistry[p]
 		if not reg.extraTipUsed then return end
+		if p.IsAnchoringSecret then -- Cannot match sizes if either tooltip has secret anchoring
+			if p:IsAnchoringSecret() or self:IsAnchoringSecret() then
+				return
+			end
+		end
 
 		-- Block re-entry as our resizing below may trigger additional calls to this function. Ensure we clear this flag before exiting
 		self.inMatchSize = true
