@@ -52,7 +52,7 @@ module.exports = new function () {
             return result;
         }
 
-        result.itemLevel = item.itemLevel;
+        result.itemLevel = item.itemLevelRaw;
 
         let curve, curvePrio;
         let name, namePrio;
@@ -86,9 +86,11 @@ module.exports = new function () {
             });
         }
 
+        let squishLevel = bonusData.squishCurve > 0;
         if (scalingConfig) {
-            result.itemLevel = Math.round(getCurvePoint(scalingConfig[1], scalingConfig[0] || item.itemLevel));
+            result.itemLevel = Math.round(getCurvePoint(scalingConfig[1], scalingConfig[0] || item.itemLevelRaw));
             result.itemLevel += scalingConfig[2];
+            squishLevel = false;
         } else if (curve) {
             let playerLevel = 70;
             auctionItem.modifiers.forEach(function (modifier) {
@@ -105,6 +107,10 @@ module.exports = new function () {
             if (levelAdjust) {
                 result.itemLevel += levelAdjust;
             }
+        }
+
+        if (squishLevel) {
+            result.itemLevel = Math.round(getCurvePoint(bonusData.squishCurve, result.itemLevel));
         }
 
         if (name) {
