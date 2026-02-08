@@ -58,6 +58,7 @@ module.exports = new function () {
         let name, namePrio;
         let setLevel, setLevelPrio;
         let levelAdjust = 0;
+        let scalingConfig;
 
         if (auctionItem.bonus_lists) {
             auctionItem.bonus_lists.forEach(function (bonus) {
@@ -80,10 +81,15 @@ module.exports = new function () {
                     setLevelPrio = params[0];
                     setLevel = params[1];
                 }
+
+                scalingConfig = bonusData.scalingConfigs[bonus] ?? scalingConfig;
             });
         }
 
-        if (curve) {
+        if (scalingConfig) {
+            result.itemLevel = Math.round(getCurvePoint(scalingConfig[1], scalingConfig[0] || item.itemLevel));
+            result.itemLevel += scalingConfig[2];
+        } else if (curve) {
             let playerLevel = 70;
             auctionItem.modifiers.forEach(function (modifier) {
                 if (modifier.type === Constants.MODIFIER_TIMEWALKER_LEVEL) {
