@@ -59,11 +59,13 @@ module.exports = new function () {
         let name, namePrio;
         let setLevel, setLevelPrio;
         let levelAdjust = 0;
+        let curveLevelAdjust = 0;
         let scalingConfig;
 
         if (auctionItem.bonus_lists) {
             auctionItem.bonus_lists.forEach(function (bonus) {
                 levelAdjust += bonusData.levels[bonus] || 0;
+                curveLevelAdjust += bonusData.bonusCurveAdjustments[bonus] || 0;
 
                 let params = bonusData.playerLevelCurves[bonus];
                 if (params && (!playerLevelCurve || playerLevelCurvePrio > params[0])) {
@@ -113,10 +115,9 @@ module.exports = new function () {
             if (setLevel) {
                 result.itemLevel = setLevel;
             }
-            if (levelAdjust) {
-                result.itemLevel += levelAdjust;
-            }
+            result.itemLevel += levelAdjust;
         }
+        result.itemLevel += curveLevelAdjust;
 
         if (squishLevel) {
             result.itemLevel = Math.round(getCurvePoint(bonusData.squishCurve, result.itemLevel));
