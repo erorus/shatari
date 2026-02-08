@@ -54,7 +54,8 @@ module.exports = new function () {
 
         result.itemLevel = item.itemLevelRaw;
 
-        let curve, curvePrio;
+        let playerLevelCurve, playerLevelCurvePrio;
+        let bonusCurve, bonusCurvePrio;
         let name, namePrio;
         let setLevel, setLevelPrio;
         let levelAdjust = 0;
@@ -64,10 +65,10 @@ module.exports = new function () {
             auctionItem.bonus_lists.forEach(function (bonus) {
                 levelAdjust += bonusData.levels[bonus] || 0;
 
-                let params = bonusData.curves[bonus];
-                if (params && (!curve || curvePrio > params[0])) {
-                    curvePrio = params[0];
-                    curve = params[1];
+                let params = bonusData.playerLevelCurves[bonus];
+                if (params && (!playerLevelCurve || playerLevelCurvePrio > params[0])) {
+                    playerLevelCurvePrio = params[0];
+                    playerLevelCurve = params[1];
                 }
 
                 params = bonusData.names[bonus];
@@ -82,6 +83,12 @@ module.exports = new function () {
                     setLevel = params[1];
                 }
 
+                params = bonusData.bonusCurves[bonus];
+                if (params && (!bonusCurve || bonusCurvePrio > params[0])) {
+                    bonusCurvePrio = params[0];
+                    bonusCurve = [params[1], params[2]];
+                }
+
                 scalingConfig = bonusData.scalingConfigs[bonus] ?? scalingConfig;
             });
         }
@@ -91,7 +98,9 @@ module.exports = new function () {
             result.itemLevel = Math.round(getCurvePoint(scalingConfig[1], scalingConfig[0] || item.itemLevelRaw));
             result.itemLevel += scalingConfig[2];
             squishLevel = false;
-        } else if (curve) {
+        } else if (bonusCurve) {
+            result.itemLevel = Math.round(getCurvePoint(bonusCurve[0], bonusCurve[1]) || bonusCurve[1]);
+        } else if (playerLevelCurve) {
             let playerLevel = 70;
             auctionItem.modifiers.forEach(function (modifier) {
                 if (modifier.type === Constants.MODIFIER_TIMEWALKER_LEVEL) {
@@ -99,7 +108,7 @@ module.exports = new function () {
                 }
             });
 
-            result.itemLevel = Math.round(getCurvePoint(curve, playerLevel));
+            result.itemLevel = Math.round(getCurvePoint(playerLevelCurve, playerLevel));
         } else {
             if (setLevel) {
                 result.itemLevel = setLevel;
