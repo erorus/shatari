@@ -39,6 +39,8 @@ Thanks to Blizzard for the [Battle.net API](https://develop.battle.net).
 
 Thanks to [CurseForge](https://www.curseforge.com) and [Wago](https://wago.io) for hosting addons, providing upload APIs, and having author rewards programs.
 
+Thanks to the folks maintaining [LibExtraTip](https://gitlab.com/norganna-wow/libs/libextratip) for making the Oribos Exchange addon possible.
+
 Thanks to my patrons, and the entire WoW Economy community, for their interest and support for this project.
 
 Click here to support my WoW projects: [![Become a Patron!](https://everynothing.net/patronButton.png)](https://www.patreon.com/bePatron?u=4445407)
