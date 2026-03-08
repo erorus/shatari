@@ -128,6 +128,8 @@ module.exports = new function () {
         let result = item.itemLevel;
         let era = item.squishEra ?? 0;
 
+        let eraAdjust = {};
+
         if (auctionItem.bonus_lists) {
             let bonuses = auctionItem.bonus_lists;
 
@@ -206,11 +208,22 @@ module.exports = new function () {
                 });
 
             // Era Adjust, type 52
+            // This whole bonus is weird. It seems to be used only on profession tools/accessories and makes no sense.
             bonuses
                 .map(bonus => bonusData.levelData.eraAdjust[bonus])
                 .filter(exists)
                 .forEach(([amount, fallbackAmount, checkEra]) => {
-                    result += (era > checkEra) ? fallbackAmount : amount;
+                    // All of this is shaky speculation.
+                    if (checkEra > era) {
+                        eraAdjust[checkEra] ??= 0;
+                        eraAdjust[checkEra] += amount;
+                        if (era === 0) {
+                            eraAdjust[2] ??= 0
+                            eraAdjust[2] += 4; // Kludge. This makes our results match in-game, but I don't know why.
+                        }
+                    } else {
+                        result += fallbackAmount;
+                    }
                 });
 
             // Adjust, type 53
@@ -229,6 +242,8 @@ module.exports = new function () {
             if (eraData.id > era && eraData.curve.length) {
                 result = Math.round(getCurvePoint(eraData.curve, result));
             }
+
+            result += eraAdjust[eraData.id] ?? 0;
 
             if (eraData.target) {
                 break;
