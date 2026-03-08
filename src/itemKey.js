@@ -52,79 +52,18 @@ module.exports = new function () {
             return result;
         }
 
-        result.itemLevel = item.itemLevelRaw;
-
-        let playerLevelCurve, playerLevelCurvePrio;
-        let bonusCurve, bonusCurvePrio;
-        let name, namePrio;
-        let setLevel, setLevelPrio;
-        let levelAdjust = 0;
-        let curveLevelAdjust = 0;
-        let scalingConfig;
+        result.itemLevel = getItemLevel(item, auctionItem);
 
         if (auctionItem.bonus_lists) {
-            auctionItem.bonus_lists.forEach(function (bonus) {
-                levelAdjust += bonusData.levels[bonus] || 0;
-                curveLevelAdjust += bonusData.bonusCurveAdjustments[bonus] || 0;
+            auctionItem.bonus_lists
+                .map(bonus => bonusData.names[bonus])
+                .filter(row => row)
+                .sort((a, b) => b[0] - a[0])
+                .some(([prio, name]) => {
+                    result.itemSuffix = name;
 
-                let params = bonusData.playerLevelCurves[bonus];
-                if (params && (!playerLevelCurve || playerLevelCurvePrio > params[0])) {
-                    playerLevelCurvePrio = params[0];
-                    playerLevelCurve = params[1];
-                }
-
-                params = bonusData.names[bonus];
-                if (params && (!name || namePrio > params[0])) {
-                    namePrio = params[0];
-                    name = params[1];
-                }
-
-                params = bonusData.setLevels[bonus];
-                if (params && (!setLevel || setLevelPrio > params[0])) {
-                    setLevelPrio = params[0];
-                    setLevel = params[1];
-                }
-
-                params = bonusData.bonusCurves[bonus];
-                if (params && (!bonusCurve || bonusCurvePrio > params[0])) {
-                    bonusCurvePrio = params[0];
-                    bonusCurve = [params[1], params[2]];
-                }
-
-                scalingConfig = bonusData.scalingConfigs[bonus] ?? scalingConfig;
-            });
-        }
-
-        let squishLevel = bonusData.squishCurve > 0;
-        if (scalingConfig) {
-            result.itemLevel = Math.round(getCurvePoint(scalingConfig[1], scalingConfig[0] || item.itemLevelRaw));
-            result.itemLevel += scalingConfig[2];
-            squishLevel = false;
-        } else if (bonusCurve) {
-            result.itemLevel = Math.round(getCurvePoint(bonusCurve[0], bonusCurve[1]) || bonusCurve[1]);
-        } else if (playerLevelCurve) {
-            let playerLevel = 70;
-            auctionItem.modifiers.forEach(function (modifier) {
-                if (modifier.type === Constants.MODIFIER_TIMEWALKER_LEVEL) {
-                    playerLevel = modifier.value;
-                }
-            });
-
-            result.itemLevel = Math.round(getCurvePoint(playerLevelCurve, playerLevel));
-        } else {
-            if (setLevel) {
-                result.itemLevel = setLevel;
-            }
-            result.itemLevel += levelAdjust;
-        }
-        result.itemLevel += curveLevelAdjust;
-
-        if (squishLevel) {
-            result.itemLevel = Math.round(getCurvePoint(bonusData.squishCurve, result.itemLevel));
-        }
-
-        if (name) {
-            result.itemSuffix = name;
+                    return true;
+                });
         }
 
         return result;
@@ -148,24 +87,25 @@ module.exports = new function () {
             .map(statKey => parseInt(statKey));
     };
 
+    /**
+     *
+     * @param {number|array<number[]>} curveId
+     * @param {number} x
+     * @return {number}
+     */
     function getCurvePoint(curveId, x) {
-        let curve = bonusData.curvePoints[curveId];
+        let curve = (typeof curveId === 'number') ? bonusData.curvePoints[curveId] : curveId;
         if (!curve) {
             return 0;
         }
 
-        let keys = Object.keys(curve);
-        keys.map(value => parseInt(value)).sort(function (a, b) {
-            return a - b;
-        });
-
-        if (x <= curve[keys[0]][0]) {
-            return curve[keys[0]][1];
+        if (x <= curve[0][0]) {
+            return curve[0][1];
         }
 
-        for (let i = 1; i < keys.length; i++) {
-            let step = keys[i];
-            let prev = keys[i - 1];
+        for (let i = 1; i < curve.length; i++) {
+            let step = i;
+            let prev = i - 1;
             if (x < curve[step][0]) {
                 let pct = (x - curve[prev][0]) / (curve[step][0] - curve[prev][0]);
                 let scale = curve[step][1] - curve[prev][1];
@@ -174,6 +114,127 @@ module.exports = new function () {
             }
         }
 
-        return curve[keys[keys.length - 1]][1];
+        return curve[curve.length - 1][1];
+    }
+
+    /**
+     * Returns the final item level of the item in the given auction.
+     *
+     * @param {object}      item
+     * @param {AuctionItem} auctionItem
+     * @return {number}
+     */
+    function getItemLevel(item, auctionItem) {
+        let result = item.itemLevel;
+        let era = item.squishEra ?? 0;
+
+        if (auctionItem.bonus_lists) {
+            let bonuses = auctionItem.bonus_lists;
+
+            const exists = row => row;
+            const byPrio = (a, b) => b[0] - a[0];
+
+            let playerLevelTemp = Constants.PLAYER_LEVEL_CAP;
+            auctionItem.modifiers?.forEach(function (modifier) {
+                if (modifier.type === Constants.MODIFIER_TIMEWALKER_LEVEL) {
+                    playerLevelTemp = modifier.value;
+                }
+            });
+            const playerLevel = playerLevelTemp;
+
+            // Legacy Set, type 42
+            bonuses
+                .map(bonus => bonusData.levelData.legacySet[bonus])
+                .filter(exists)
+                .sort(byPrio)
+                .some(([prio, level]) => {
+                    result = level;
+
+                    return true;
+                });
+
+            // Content Tuning, type 13
+            bonuses
+                .map(bonus => bonusData.levelData.contentTuning[bonus])
+                .filter(exists)
+                .sort(byPrio)
+                .some(([prio, curve, playerMax]) => {
+                    result = Math.round(getCurvePoint(curve, Math.min(playerLevel, playerMax || playerLevel)));
+
+                    return true;
+                });
+
+            // Legacy Adjust, type 1
+            bonuses
+                .map(bonus => bonusData.levelData.legacyAdjust[bonus])
+                .filter(exists)
+                .forEach(amount => {
+                    result += amount;
+                });
+
+            // Item Scaling Config, type 49
+            bonuses
+                .map(bonus => bonusData.levelData.itemScalingSet[bonus])
+                .filter(exists)
+                .sort(byPrio)
+                .some(([prio, level, curve, offset, setEra]) => {
+                    result = (curve ? Math.round(getCurvePoint(curve, level || result)) : level) + offset;
+                    era = setEra;
+
+                    return true;
+                });
+
+            // Era Curve, type 48
+            bonuses
+                .map(bonus => bonusData.levelData.eraCurveSet[bonus])
+                .filter(exists)
+                .forEach(([curve, level, setEra]) => {
+                    result = Math.round(getCurvePoint(curve, level || result));
+                    era = setEra;
+                });
+
+            // Item Scaling Config by Drop Level, type 51
+            bonuses
+                .map(bonus => bonusData.levelData.itemScalingSetByPlayer[bonus])
+                .filter(exists)
+                .sort(byPrio)
+                .some(([prio, level, curve, offset, setEra]) => {
+                    result = (curve ? Math.round(getCurvePoint(curve, level || playerLevel)) : level) + offset;
+                    era = setEra;
+
+                    return true;
+                });
+
+            // Era Adjust, type 52
+            bonuses
+                .map(bonus => bonusData.levelData.eraAdjust[bonus])
+                .filter(exists)
+                .forEach(([amount, fallbackAmount, checkEra]) => {
+                    result += (era > checkEra) ? fallbackAmount : amount;
+                });
+
+            // Adjust, type 53
+            bonuses
+                .map(bonus => bonusData.levelData.adjust[bonus])
+                .filter(exists)
+                .sort(byPrio)
+                .some(([prio, amount]) => {
+                    result += amount;
+
+                    return true;
+                });
+        }
+
+        for (let eraData, x = 0; eraData = bonusData.squishEras[x]; x++) {
+            if (eraData.id > era && eraData.curve.length) {
+                result = Math.round(getCurvePoint(eraData.curve, result));
+            }
+
+            if (eraData.target) {
+                break;
+            }
+        }
+
+        return Math.max(1, result);
     }
 }

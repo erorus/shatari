@@ -33,4 +33,6 @@ module.exports = new function () {
 
     // Items from expansions before this value are skipped when being selective about variation inclusion.
     this.VARIATION_EXPANSION_CUTOFF = 11;
+
+    this.PLAYER_LEVEL_CAP = 90;
 }
