@@ -83,6 +83,9 @@ function logMsg(message) {
  * @return {object}
  */
 async function fetchRealmList() {
+    // Convert "enus" into "en-US"
+    const bcp47 = locale => api.localeBuild(locale).replace(/_/g, '-');
+
     const result = {
         ids: {},
         names: {},
@@ -122,12 +125,22 @@ async function fetchRealmList() {
                         connectedId: parseInt(connectedRealmId),
                     };
 
+                    // Blizz uses "enUS" for the realm locale format, but "en_US" everywhere else, ugh.
+                    const realmLocale = api.localeParse(realmRec.locale ?? 'xxxx');
+                    const nativeName = realmRec.name[api.localeBuild(realmLocale)];
+                    // We have to compare the lowercase since I don't want "Der abyssische Rat (Der Abyssische Rat)"
+                    const nativeNameLower = nativeName?.toLocaleLowerCase(bcp47(realmLocale));
+
                     Constants.LOCALES.forEach(locale => {
-                        result.names[locale] = result.names[locale] || {};
-                        result.names[locale][realmRec.id] = {
+                        const nameRec = {
                             name: realmRec.name[api.localeBuild(locale)],
                             category: realmRec.category[api.localeBuild(locale)],
                         };
+                        if (nativeName != null && !nameRec.name.toLocaleLowerCase(bcp47(locale)).startsWith(nativeNameLower)) {
+                            nameRec.nativeName = nativeName;
+                        }
+                        result.names[locale] ??= {};
+                        result.names[locale][realmRec.id] = nameRec;
                     });
 
                     if (!result.ids.hasOwnProperty(realmResult.id)) {
