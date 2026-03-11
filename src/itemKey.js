@@ -222,7 +222,7 @@ module.exports = new function () {
                             eraAdjust[2] += 4; // Kludge. This makes our results match in-game, but I don't know why.
                         }
                     } else {
-                        result += fallbackAmount;
+                        result += checkEra < era ? fallbackAmount : amount;
                     }
                 });
 
