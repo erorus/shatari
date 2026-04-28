@@ -117,8 +117,6 @@ module.exports = new function () {
      * @param {object} state
      */
     this.put = async function (connectedRealmId, state) {
-        const path = getPath(connectedRealmId);
-
         // Start off with version number in front.
         let bufferSize = 1;
         // 4 bytes for snapshot timestamp
@@ -135,6 +133,7 @@ module.exports = new function () {
         Object.values(state.bonusStatItems || {}).forEach(itemList => bufferSize += itemList.length * (4 + 2 + 2));
 
         const buf = Buffer.allocUnsafe(bufferSize);
+        const freeBuf = Buffer.allocUnsafe(bufferSize);
         let cursorPosition = 0;
         let advance = function (size) {
             let res = cursorPosition;
@@ -159,11 +158,13 @@ module.exports = new function () {
         // Summary list
         let summary = state.summary || {};
         buf.writeUInt32LE(Object.keys(summary).length, advance(4));
+        buf.copy(freeBuf, 0, 0, cursorPosition);
         for (let itemKeyString in summary) {
             if (!summary.hasOwnProperty(itemKeyString)) {
                 continue;
             }
-            let itemKey = ItemKeySerialize.parse(itemKeyString);
+            const itemKey = ItemKeySerialize.parse(itemKeyString);
+            let recordPos = cursorPosition;
 
             buf.writeUInt32LE(itemKey.itemId, advance(4));
             buf.writeUInt16LE(itemKey.itemLevel, advance(2));
@@ -171,9 +172,19 @@ module.exports = new function () {
             buf.writeUInt32LE(summary[itemKeyString][0] / MS_SEC, advance(4));
             buf.writeUInt32LE(summary[itemKeyString][1] / COPPER_SILVER, advance(4));
             buf.writeUInt32LE(summary[itemKeyString][2], advance(4));
+
+            if (isRestricted(itemKey)) {
+                buf.copy(freeBuf, recordPos, recordPos, recordPos + 8); recordPos += 8;
+                freeBuf.writeUInt32LE(0, recordPos); recordPos += 4; // timestamp
+                freeBuf.writeUInt32LE(0, recordPos); recordPos += 4; // price
+                freeBuf.writeUInt32LE(0, recordPos); recordPos += 4; // quantity
+            } else {
+                buf.copy(freeBuf, recordPos, recordPos, cursorPosition);
+            }
         }
 
         // Bonus stat items
+        let bonusStatPos = cursorPosition;
         let bonusStatItems = state.bonusStatItems || {};
         buf.writeUInt8(Object.keys(bonusStatItems).length, advance(1));
         for (let bonusStatString in bonusStatItems) {
@@ -190,14 +201,17 @@ module.exports = new function () {
                 buf.writeUInt16LE(itemKey.itemSuffix, advance(2));
             });
         }
+        buf.copy(freeBuf, bonusStatPos, bonusStatPos);
 
         if (cursorPosition !== bufferSize) {
             throw "Wrote " + cursorPosition + " bytes into a buffer of size " + bufferSize;
         }
 
-        const compressed = await gzip(buf);
-
-        await ShatariWriter(path, compressed);
+        const [comp, freeComp] = await Promise.all([gzip(buf), gzip(freeBuf)]);
+        await Promise.all([
+            ShatariWriter(getPath(connectedRealmId), comp),
+            ShatariWriter(getPath(connectedRealmId, true), freeComp),
+        ]);
     }
 
     // ------- //
@@ -208,9 +222,22 @@ module.exports = new function () {
      * Returns the filesystem path to the connected realm's state file.
      *
      * @param {number} connectedRealmId
+     * @param {boolean} freeVersion
      * @return {string}
      */
-    function getPath(connectedRealmId) {
-        return Path.resolve(DATA_DIR, '' + connectedRealmId, 'state.bin');
+    function getPath(connectedRealmId, freeVersion = false) {
+        const freePart = freeVersion ? '.free' : '';
+
+        return Path.resolve(DATA_DIR, '' + connectedRealmId, `state${freePart}.bin`);
+    }
+
+    /**
+     * Returns whether the given item key would be restricted for free users.
+     *
+     * @param {ItemKey} itemKey
+     * @return {boolean}
+     */
+    function isRestricted(itemKey) {
+        return !!(itemKey.itemSuffix || (itemKey.itemLevel && itemKey.itemId !== Constants.ITEM_PET_CAGE));
     }
 };
