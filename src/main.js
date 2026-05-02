@@ -656,6 +656,7 @@ async function processConnectedRealm(connectedRealmId) {
     let downloadTime = 0;
     logMsg("Starting", connectedRealmId);
 
+    let updateApiData = false;
     const realmState = await RealmState.get(connectedRealmId);
 
     let headers = {};
@@ -687,13 +688,14 @@ async function processConnectedRealm(connectedRealmId) {
             items = results.stats;
             bonusStatItems = results.bonusStatItems;
         } catch (error) {
-            await RealmState.put(connectedRealmId, realmState);
+            await RealmState.put(connectedRealmId, realmState, false);
 
             setPendingTimer(connectedRealmId, realmState);
 
             throw error;
         }
 
+        updateApiData = true;
         realmState.snapshot = thisSnapshot;
         realmState.summary ??= {};
         for (let itemKey in items) {
@@ -736,7 +738,7 @@ async function processConnectedRealm(connectedRealmId) {
         logMsg("Downloaded no new data in " + (requestTime / Constants.MS_SEC) + ` seconds since ${lastModified}`, connectedRealmId);
     }
 
-    await RealmState.put(connectedRealmId, realmState);
+    await RealmState.put(connectedRealmId, realmState, updateApiData);
 
     setPendingTimer(connectedRealmId, realmState);
 

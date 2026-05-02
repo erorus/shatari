@@ -257,13 +257,13 @@ module.exports = new function () {
                         level: itemKey.level,
                         ...itemData,
                     };
-                }
-                if (itemKey.itemSuffix) {
-                    target.suffix ??= {};
-                    target = target.suffix[itemKey.itemSuffix] ??= {
-                        suffix: itemKey.suffix,
-                        ...itemData,
-                    };
+                    if (itemKey.itemSuffix) {
+                        target.suffix ??= {};
+                        target = target.suffix[itemKey.itemSuffix] ??= {
+                            suffix: itemKey.suffix,
+                            ...itemData,
+                        };
+                    }
                 }
             }
             Object.assign(target, itemData);

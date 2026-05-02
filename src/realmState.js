@@ -5,7 +5,9 @@ const {gzip, ungzip} = require('node-gzip');
 const Constants = require('./constants');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ShatariWriter = require('./shatariWriter');
+const {getRegionForRealm} = require("./commodityRealm");
 
+const API_DIR = Constants.API_DIR;
 const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
@@ -115,8 +117,14 @@ module.exports = new function () {
      *
      * @param {number} connectedRealmId
      * @param {object} state
+     * @param {boolean} updateApiData
      */
-    this.put = async function (connectedRealmId, state) {
+    this.put = async function (connectedRealmId, state, updateApiData) {
+        const waitFor = [];
+        if (updateApiData) {
+            waitFor.push(...putApiData(connectedRealmId, state));
+        }
+
         // Start off with version number in front.
         let bufferSize = 1;
         // 4 bytes for snapshot timestamp
@@ -208,10 +216,11 @@ module.exports = new function () {
         }
 
         const [comp, freeComp] = await Promise.all([gzip(buf), gzip(freeBuf)]);
-        await Promise.all([
+        waitFor.push(
             ShatariWriter(getPath(connectedRealmId), comp),
             ShatariWriter(getPath(connectedRealmId, true), freeComp),
-        ]);
+        );
+        await Promise.all(waitFor);
     }
 
     // ------- //
@@ -239,5 +248,81 @@ module.exports = new function () {
      */
     function isRestricted(itemKey) {
         return !!(itemKey.itemSuffix || (itemKey.itemLevel && itemKey.itemId !== Constants.ITEM_PET_CAGE));
+    }
+
+    /**
+     * Writes the JSON API files for the realm data.
+     *
+     * @param {number} connectedRealmId
+     * @param {object} state
+     * @return {Promise[]}
+     */
+    function putApiData(connectedRealmId, state) {
+        const commodityRegion = getRegionForRealm(connectedRealmId);
+        if (commodityRegion) {
+            return putCommodityApiData(commodityRegion, state);
+        }
+
+        const waitFor = [];
+
+        return waitFor;
+    }
+
+    /**
+     * Writes the JSON API files for the commodity realm data.
+     *
+     * @param {string} region
+     * @param {object} state
+     * @return {Promise[]}
+     */
+    function putCommodityApiData(region, state) {
+        const waitFor = [];
+
+        const data = {};
+
+        Object.entries(state.summary || {}).forEach(([itemKeyString, record]) => {
+            const itemData = {
+                price: record[1],
+                quantity: record[2],
+                lastSeen: record[0] / MS_SEC,
+            }
+
+            const itemKey = ItemKeySerialize.parse(itemKeyString);
+            let target = data[itemKey.itemId] ??= {
+                item: itemKey.itemId,
+                ...itemData,
+            };
+            if (itemKey.itemLevel) {
+                target.level ??= {};
+                target = target.level[itemKey.itemLevel] ??= {
+                    level: itemKey.level,
+                    ...itemData,
+                };
+                if (itemKey.itemSuffix) {
+                    target.suffix ??= {};
+                    target = target.suffix[itemKey.itemSuffix] ??= {
+                        suffix: itemKey.suffix,
+                        ...itemData,
+                    };
+                }
+            }
+
+            Object.assign(target, itemData);
+        });
+
+        const save = (size, data) => {
+            const filePath = Path.resolve(API_DIR, 'region', 'commodities', size, `${region}.json`);
+            const json = JSON.stringify(data);
+            waitFor.push(ShatariWriter(filePath, json));
+            waitFor.push((async () => {
+                await ShatariWriter(`${filePath}.gz`, await gzip(json));
+            })());
+        };
+
+        save('full', data);
+        Object.values(data).forEach(entry => {delete entry.level});
+        save('base', data);
+
+        return waitFor;
     }
 };
