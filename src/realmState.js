@@ -6,8 +6,8 @@ const Constants = require('./constants');
 const ItemKeySerialize = require('./itemKeySerialize');
 const ShatariWriter = require('./shatariWriter');
 const {getRegionForRealm} = require("./commodityRealm");
+const ItemList = require("./api/ItemList");
 
-const API_DIR = Constants.API_DIR;
 const DATA_DIR = Constants.DATA_DIR;
 
 module.exports = new function () {
@@ -258,70 +258,34 @@ module.exports = new function () {
      * @return {Promise[]}
      */
     function putApiData(connectedRealmId, state) {
-        const commodityRegion = getRegionForRealm(connectedRealmId);
-        if (commodityRegion) {
-            return putCommodityApiData(commodityRegion, state);
-        }
-
         const waitFor = [];
 
-        return waitFor;
-    }
+        {
+            const list = new ItemList();
 
-    /**
-     * Writes the JSON API files for the commodity realm data.
-     *
-     * @param {string} region
-     * @param {object} state
-     * @return {Promise[]}
-     */
-    function putCommodityApiData(region, state) {
-        const waitFor = [];
-
-        const data = {};
-
-        Object.entries(state.summary || {}).forEach(([itemKeyString, record]) => {
-            const itemData = {
-                price: record[1],
-                quantity: record[2],
-                lastSeen: record[0] / MS_SEC,
-            }
-
-            const itemKey = ItemKeySerialize.parse(itemKeyString);
-            let target = data[itemKey.itemId] ??= {
-                item: itemKey.itemId,
-                ...itemData,
-            };
-            if (itemKey.itemLevel) {
-                target.level ??= {};
-                target = target.level[itemKey.itemLevel] ??= {
-                    level: itemKey.level,
-                    ...itemData,
+            Object.entries(state.summary || {}).forEach(([itemKeyString, record]) => {
+                const itemData = {
+                    price: record[1],
+                    quantity: record[2],
                 };
-                if (itemKey.itemSuffix) {
-                    target.suffix ??= {};
-                    target = target.suffix[itemKey.itemSuffix] ??= {
-                        suffix: itemKey.suffix,
-                        ...itemData,
-                    };
+                if (itemData.quantity === 0) {
+                    if (itemData.price === 0) {
+                        return;
+                    }
+                    itemData.seen = new Date(record[0]).toJSON();
                 }
+
+                list.add(itemKeyString, itemData);
+            });
+
+
+            const commodityRegion = getRegionForRealm(connectedRealmId);
+            if (commodityRegion) {
+                return list.save('region', commodityRegion, true);
             }
 
-            Object.assign(target, itemData);
-        });
-
-        const save = (size, data) => {
-            const filePath = Path.resolve(API_DIR, 'region', 'commodities', size, `${region}.json`);
-            const json = JSON.stringify(data);
-            waitFor.push(ShatariWriter(filePath, json));
-            waitFor.push((async () => {
-                await ShatariWriter(`${filePath}.gz`, await gzip(json));
-            })());
-        };
-
-        save('full', data);
-        Object.values(data).forEach(entry => {delete entry.level});
-        save('base', data);
+            waitFor.push(...list.save('realm', connectedRealmId, false));
+        }
 
         return waitFor;
     }

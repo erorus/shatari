@@ -5,6 +5,7 @@ const {gzip, ungzip} = require('node-gzip');
 const Constants = require('./constants');
 const ItemKeySerialize = require("./itemKeySerialize");
 const ShatariWriter = require('./shatariWriter');
+const ItemList = require('./api/ItemList');
 
 const DATA_DIR = Constants.DATA_DIR;
 
@@ -209,18 +210,9 @@ module.exports = new function () {
      * @return {Promise[]}
      */
     function putApiData(region, state) {
-        const API_DIR = Constants.API_DIR;
-
-        const waitFor = [];
-
-        const data = {
-            item: {},
-            pet: {},
-        };
+        const list = new ItemList();
 
         Object.keys(state.items || {}).forEach(itemKeyString => {
-            let itemKey = ItemKeySerialize.parse(itemKeyString);
-
             const itemData = {
                 median: state.items[itemKeyString],
             };
@@ -230,63 +222,9 @@ module.exports = new function () {
                 itemData.realms = arbitrage.realms;
             }
 
-            let target;
-            if (itemKey.itemId === Constants.ITEM_PET_CAGE) {
-                const species = itemKey.itemLevel;
-                const breed = itemKey.itemSuffix;
-                target = data.pet[species] ??= {
-                    species,
-                    ...itemData,
-                };
-
-                if (breed) {
-                    target.breed ??= {};
-                    target = target.breed[breed] ??= {
-                        breed,
-                        ...itemData,
-                    };
-                }
-            } else {
-                target = data.item[itemKey.itemId] ??= {
-                    item: itemKey.itemId,
-                    ...itemData,
-                };
-                if (itemKey.itemLevel) {
-                    target.level ??= {};
-                    target = target.level[itemKey.itemLevel] ??= {
-                        level: itemKey.level,
-                        ...itemData,
-                    };
-                    if (itemKey.itemSuffix) {
-                        target.suffix ??= {};
-                        target = target.suffix[itemKey.itemSuffix] ??= {
-                            suffix: itemKey.suffix,
-                            ...itemData,
-                        };
-                    }
-                }
-            }
-            Object.assign(target, itemData);
+            list.add(itemKeyString, itemData);
         });
 
-        const save = (itemType, size, data) => {
-            const filePath = Path.resolve(API_DIR, 'region', itemType, size, `${region}.json`);
-            const json = JSON.stringify(data);
-            waitFor.push(ShatariWriter(filePath, json));
-            waitFor.push((async () => {
-                await ShatariWriter(`${filePath}.gz`, await gzip(json));
-            })());
-        };
-
-        save('items', 'full', data.item);
-        save('pets', 'full', data.pet);
-
-        Object.values(data.item).forEach(entry => {delete entry.level});
-        Object.values(data.pet).forEach(entry => {delete entry.breed});
-
-        save('items', 'base', data.item);
-        save('pets', 'base', data.pet);
-
-        return waitFor;
+        return list.save('region', region, false);
     }
 };
