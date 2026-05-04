@@ -10,6 +10,13 @@ const ItemList = require("./api/ItemList");
 
 const DATA_DIR = Constants.DATA_DIR;
 
+const STAT_API_NAMES = {
+    61: 'speed',
+    62: 'leech',
+    63: 'avoidance',
+    64: 'indestructible',
+};
+
 module.exports = new function () {
     const COPPER_SILVER = 100;
     const MS_SEC = 1000;
@@ -285,6 +292,34 @@ module.exports = new function () {
             }
 
             waitFor.push(...list.save('realm', connectedRealmId, false));
+        }
+
+        {
+            const data = {};
+            const bonusStatItems = state.bonusStatItems ?? {};
+
+            Object.entries(STAT_API_NAMES).forEach(([statIdString, statName]) => {
+                data[statName] = bonusStatItems[statIdString]?.map(itemKeyString => {
+                    const itemKey = ItemKeySerialize.parse(itemKeyString);
+
+                    const result = {
+                        item: itemKey.itemId,
+                        level: itemKey.itemLevel,
+                    };
+                    if (itemKey.itemSuffix) {
+                        result.suffix = itemKey.itemSuffix;
+                    }
+
+                    return result;
+                }) ?? [];
+            });
+
+            const filePath = Path.resolve(Constants.API_DIR, 'realm', 'stats', `${connectedRealmId}.json`);
+            const json = JSON.stringify(data);
+            waitFor.push(ShatariWriter(filePath, json));
+            waitFor.push((async () => {
+                await ShatariWriter(`${filePath}.gz`, await gzip(json));
+            })());
         }
 
         return waitFor;
