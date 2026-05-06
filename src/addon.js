@@ -526,6 +526,17 @@ async function generateToc() {
 ## SavedVariablesPerCharacter: OETooltipsHidden, OETooltipsSettings
 ## Version: 1.3.${yyyymmdd}
 ## IconTexture: 3536196
+## Category: Auctions
+## Category-deDE: Auktionen
+## Category-esES: Subastas
+## Category-esMX: Subastas
+## Category-frFR: Ventes
+## Category-itIT: Aste
+## Category-koKR: 경매
+## Category-ptBR: Leilões
+## Category-ruRU: Аукционы
+## Category-zhCN: 拍卖
+## Category-zhTW: 拍賣
 
 libs\\LibExtraTip\\Load.xml
 
