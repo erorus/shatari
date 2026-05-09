@@ -26,8 +26,10 @@ async function main() {
 
     let listPath = Path.resolve(__dirname, '..', 'realms', 'realm-list.json');
     let oldList = {};
+    let oldJson = undefined;
     try {
-        oldList = JSON.parse(await fs.readFile(listPath));
+        oldJson = await fs.readFile(listPath, {encoding: 'utf8'});
+        oldList = JSON.parse(oldJson);
     } catch (error) {
         if (error.code !== 'ENOENT') {
             throw error;
@@ -48,17 +50,90 @@ async function main() {
     logMsg('' + Object.keys(realmList.ids).length + ' realms in current list.');
 
     let writes = [];
-    writes.push(ShatariWriter(listPath, JSON.stringify(realmList.ids)));
+    {
+        const ordered = {};
+        Object.keys(realmList.ids)
+            .sort((a, b) => parseInt(a) - parseInt(b))
+            .forEach(key => ordered[key] = realmList.ids[key]);
+
+        const newJson = JSON.stringify(ordered);
+        if (oldJson === newJson) {
+            logMsg('No changes: no writes to main list.');
+        } else {
+            logMsg('Updates found: writing new main list.');
+            writes.push(ShatariWriter(listPath, newJson));
+        }
+    }
 
     for (let locale in realmList.names) {
         if (!realmList.names.hasOwnProperty(locale)) {
             continue;
         }
+        const path = Path.resolve(__dirname, '..', 'realms', `realm-names.${locale}.json`);
 
-        writes.push(ShatariWriter(
-            Path.resolve(__dirname, '..', 'realms', 'realm-names.' + locale + '.json'),
-            JSON.stringify(realmList.names[locale])
-        ));
+        const ordered = {};
+        Object.keys(realmList.names[locale])
+            .sort((a, b) => parseInt(a) - parseInt(b))
+            .forEach(key => ordered[key] = realmList.names[locale][key]);
+
+        const newJson = JSON.stringify(ordered);
+        let oldJson = undefined;
+        try {
+            oldJson = await fs.readFile(path, {encoding: 'utf8'});
+        } catch (error) {
+            logMsg(`Failed to load old realm-names.${locale}.json`);
+        }
+        if (oldJson === newJson) {
+            logMsg(`No changes: no writes to ${locale} list.`);
+        } else {
+            logMsg(`Updates found: writing new ${locale} list.`);
+            writes.push(ShatariWriter(path, newJson));
+        }
+    }
+
+    {
+        const allRealms = Object.values(realmList.ids)
+            .sort((a, b) => (regions.indexOf(a.region) - regions.indexOf(b.region)) || a.slug.localeCompare(b.slug))
+            .map(realm => {
+                const nameObject = realmList.names.enus[realm.id] ?? {name: realm.slug};
+                const result = {
+                    region: realm.region,
+                    slug: realm.slug,
+                    name: nameObject.name,
+                };
+                if (nameObject.nativeName) {
+                    result.nativeName = nameObject.nativeName;
+                }
+
+                return result;
+            });
+
+        const newJson = JSON.stringify({
+            request: {
+                list: 'realms',
+            },
+            result: {
+                lastUpdated: (new Date()).toISOString().substring(0, 19) + 'Z',
+                realms: allRealms,
+            },
+        });
+
+        const path = Path.resolve(__dirname, '..', 'realms', 'realm-list.api.json');
+        let oldJson = undefined;
+        let oldRealmsJson = undefined;
+        try {
+            oldJson = await fs.readFile(path, {encoding: 'utf8'});
+            oldRealmsJson = JSON.stringify(JSON.parse(oldJson)?.result?.realms);
+        } catch (error) {
+            logMsg('Failed to load old realm-list.api.json');
+        }
+
+        if (oldRealmsJson === JSON.stringify(allRealms)) {
+            logMsg('No changes: no writes to api list.');
+        } else {
+            logMsg('Updates found: writing new api list.');
+            writes.push(ShatariWriter(path, newJson));
+        }
     }
 
     await Promise.all(writes);
