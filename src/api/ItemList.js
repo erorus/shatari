@@ -41,13 +41,13 @@ module.exports = class ItemList {
             if (itemKey.itemLevel) {
                 target.level ??= {};
                 target = target.level[itemKey.itemLevel] ??= {
-                    level: itemKey.level,
+                    level: itemKey.itemLevel,
                     ...itemData,
                 };
                 if (itemKey.itemSuffix) {
                     target.suffix ??= {};
                     target = target.suffix[itemKey.itemSuffix] ??= {
-                        suffix: itemKey.suffix,
+                        suffix: itemKey.itemSuffix,
                         ...itemData,
                     };
                 }
