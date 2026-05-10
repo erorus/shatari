@@ -42,7 +42,7 @@ module.exports = class ItemList {
                 target.level ??= {};
                 target = target.level[itemKey.itemLevel] ??= {
                     level: itemKey.itemLevel,
-                    ...itemData,
+                    ...(itemKey.itemSuffix ? {} : itemData),
                 };
                 if (itemKey.itemSuffix) {
                     target.suffix ??= {};
