@@ -121,7 +121,7 @@ async function main() {
 
     // Init realm timers.
     const initRealmCheck = async function (realmId) {
-        setPendingTimer(realmId, await RealmState.get(realmId));
+        setPendingTimer(realmId, await RealmState.get(realmId, true));
     };
     const initTokenCheck = async function (region) {
         setPendingTokenTimer(region, await TokenState.get(region));
@@ -661,16 +661,16 @@ async function processConnectedRealm(connectedRealmId) {
     let downloadTime = 0;
     logMsg("Starting", connectedRealmId);
 
-    let updateApiData = false;
-    const realmState = await RealmState.get(connectedRealmId);
+    let skipRealmStateUpdate = false; // We can skip updating the realm state when the realm process handles it.
+    const shortRealmState = await RealmState.get(connectedRealmId, true);
 
     let headers = {};
-    let lastSnapshot = realmState.snapshot;
-    if (lastSnapshot) {
-        headers['if-modified-since'] = getHttpDate(new Date(lastSnapshot));
+    if (shortRealmState.snapshot) {
+        headers['if-modified-since'] = getHttpDate(new Date(shortRealmState.snapshot));
     }
 
-    realmState.lastCheck = Date.now();
+    const checkStart = Date.now();
+    shortRealmState.lastCheck = checkStart;
     let response;
     try {
         response = await api.fetch(region, CommodityRealm.getApiPath(connectedRealmId), {}, headers);
@@ -681,71 +681,49 @@ async function processConnectedRealm(connectedRealmId) {
     }
 
     if (response.status === 200) {
-        downloadTime = Date.now() - realmState.lastCheck;
+        downloadTime = Date.now() - checkStart;
         logMsg("Downloaded auctions in " + (downloadTime / Constants.MS_SEC) + " seconds", connectedRealmId);
 
         const thisSnapshot = (new Date(response.headers['last-modified'])).valueOf();
 
-        let items;
-        let bonusStatItems;
+        let newSnapshots;
         try {
-            const results = await processConnectedRealmAuctions(connectedRealmId, thisSnapshot, response.data);
-            items = results.stats;
-            bonusStatItems = results.bonusStatItems;
+            const results = await processConnectedRealmAuctions(connectedRealmId, checkStart, thisSnapshot, response.data);
+            newSnapshots = results.snapshots;
         } catch (error) {
-            await RealmState.put(connectedRealmId, realmState, false);
+            await RealmState.updateLastCheck(connectedRealmId, checkStart);
 
-            setPendingTimer(connectedRealmId, realmState);
+            setPendingTimer(connectedRealmId, shortRealmState);
 
             throw error;
         }
 
-        updateApiData = true;
-        realmState.snapshot = thisSnapshot;
-        realmState.summary ??= {};
-        for (let itemKey in items) {
-            if (!items.hasOwnProperty(itemKey)) {
-                continue;
-            }
+        // We won't write a realm state here, the realm process already did.
+        skipRealmStateUpdate = true;
 
-            const lastSeen = items[itemKey].q > 0 ?
-                thisSnapshot :
-                (realmState.summary[itemKey]?.[0] ?? thisSnapshot);
-            realmState.summary[itemKey] = [lastSeen, items[itemKey].p, items[itemKey].q];
-        }
-
-        const tooOld = thisSnapshot - Constants.MAX_HISTORY;
-        realmState.snapshots = realmState.snapshots || [];
-        for (let snapshot, x = 0; snapshot = realmState.snapshots[x]; x++) {
-            if (snapshot < tooOld || snapshot === thisSnapshot) {
-                realmState.snapshots.splice(x--, 1);
-            }
-        }
-        realmState.snapshots.push(thisSnapshot);
-        realmState.snapshots.sort(function (a, b) {
-            return a - b;
-        });
-
-        realmState.bonusStatItems = bonusStatItems;
+        // But we'll update these for the global state and pending timer.
+        shortRealmState.snapshot = thisSnapshot;
+        shortRealmState.snapshots = newSnapshots;
 
         await GlobalState.lock();
         const globalState = await GlobalState.get();
         globalState.snapshots = globalState.snapshots || {};
         globalState.snapshots[connectedRealmId] = thisSnapshot;
         globalState.snapshotLists = globalState.snapshotLists || {};
-        globalState.snapshotLists[connectedRealmId] = realmState.snapshots;
+        globalState.snapshotLists[connectedRealmId] = shortRealmState.snapshots;
         await GlobalState.put(globalState);
         GlobalState.unlock();
     }
     if (response.status === 304) {
-        const requestTime = Date.now() - realmState.lastCheck;
+        const requestTime = Date.now() - checkStart;
         const lastModified = response.headers?.['last-modified'] ?? '?';
         logMsg("Downloaded no new data in " + (requestTime / Constants.MS_SEC) + ` seconds since ${lastModified}`, connectedRealmId);
     }
+    if (!skipRealmStateUpdate) {
+        await RealmState.updateLastCheck(connectedRealmId, checkStart);
+    }
 
-    await RealmState.put(connectedRealmId, realmState, updateApiData);
-
-    setPendingTimer(connectedRealmId, realmState);
+    setPendingTimer(connectedRealmId, shortRealmState);
 
     let totalElapsed = (Date.now() - startTime);
     logMsg("Finished after " + (totalElapsed / Constants.MS_SEC) + " seconds" +
@@ -758,11 +736,12 @@ async function processConnectedRealm(connectedRealmId) {
  * Given auction data and a realm ID, update our files for that realm.
  *
  * @param {number} connectedRealmId
+ * @param {number} checkStart
  * @param {number} thisSnapshot
  * @param {object} data  The parsed JSON response from the API
- * @return {Promise<object>} All the item stats from the snapshot, keyed by item key.
+ * @return {Promise<object>} Globalstate related data.
  */
-function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
+function processConnectedRealmAuctions(connectedRealmId, checkStart, thisSnapshot, data) {
     logMsg("Sending " + (data.auctions || []).length + " auctions from " +
         dateFormat(new Date(thisSnapshot), 'UTC:HH:MM:ss') + " to child", connectedRealmId);
 
@@ -771,7 +750,7 @@ function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
 
         child.on('message', m => {
             if (m.action === 'finish') {
-                logMsg("Received " + Object.keys(m.data.stats || {}).length + " items back from child", connectedRealmId);
+                logMsg('Child finished.', connectedRealmId);
                 resolve(m.data);
             } else if (m.action === 'error') {
                 logMsg("Child reported some error", connectedRealmId);
@@ -792,10 +771,11 @@ function processConnectedRealmAuctions(connectedRealmId, thisSnapshot, data) {
             action: 'start',
             data: {
                 region: realmList[connectedRealmId] || CommodityRealm.getRegionForRealm(connectedRealmId),
-                itemList: itemList,
-                connectedRealmId: connectedRealmId,
-                thisSnapshot: thisSnapshot,
-                data: data,
+                itemList,
+                connectedRealmId,
+                checkStart,
+                thisSnapshot,
+                data,
             }
         });
     });

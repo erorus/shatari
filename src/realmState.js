@@ -31,9 +31,10 @@ module.exports = new function () {
      * Reads from disk and returns the local state object for the given connected realm.
      *
      * @param {number} connectedRealmId
+     * @param {boolean} shortVersion When true, skips summary and bonus stat items.
      * @return {object}
      */
-    this.get = async function (connectedRealmId) {
+    this.get = async function (connectedRealmId, shortVersion = false) {
         const path = getPath(connectedRealmId);
         let compressed;
         try {
@@ -84,6 +85,11 @@ module.exports = new function () {
         for (let remaining = buf.readUInt16LE(advance(2)); remaining > 0; remaining--) {
             result.snapshots.push(buf.readUInt32LE(advance(4)) * MS_SEC);
         }
+
+        if (shortVersion) {
+            return result;
+        }
+
         result.summary = {};
         for (let remaining = buf.readUInt32LE(advance(4)); remaining > 0; remaining--) {
             let itemKey = {
@@ -125,13 +131,13 @@ module.exports = new function () {
      *
      * @param {number} connectedRealmId
      * @param {object} state
-     * @param {boolean} updateApiData
      */
-    this.put = async function (connectedRealmId, state, updateApiData) {
-        const waitFor = [];
-        if (updateApiData) {
-            waitFor.push(...putApiData(connectedRealmId, state));
+    this.put = async function (connectedRealmId, state) {
+        if (!state.hasOwnProperty('summary')) {
+            throw 'Tried to put a realm state without its summary list!';
         }
+
+        const waitFor = [...putApiData(connectedRealmId, state)];
 
         // Start off with version number in front.
         let bufferSize = 1;
@@ -229,6 +235,30 @@ module.exports = new function () {
             ShatariWriter(getPath(connectedRealmId, true), freeComp),
         );
         await Promise.all(waitFor);
+    }
+
+    /**
+     * Loads the main state object from disk, updates the last check time in it, and saves it.
+     *
+     * @param {number} connectedRealmId
+     * @param {object} lastCheck
+     */
+    this.updateLastCheck = async function (connectedRealmId, lastCheck) {
+        const path = getPath(connectedRealmId);
+
+        let buf;
+        try {
+            buf = await ungzip(await fs.readFile(path));
+        } catch (error) {
+            console.log("Realm " + connectedRealmId + " Error loading realm state for updating last check");
+            console.log(error);
+
+            return;
+        }
+
+        buf.writeUInt32LE((lastCheck || 0) / MS_SEC, 5);
+
+        await ShatariWriter(path, await gzip(buf));
     }
 
     // ------- //

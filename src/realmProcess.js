@@ -212,6 +212,54 @@ const realmProcess = new function () {
     }
 
     /**
+     *
+     * @param {number} connectedRealmId
+     * @param {number} checkStart
+     * @param {number} thisSnapshot
+     * @param {object} items
+     * @param {object} bonusStatItems
+     * @return {Promise<number[]>} Updated snapshots list.
+     */
+    this.updateRealmState = async function (
+        connectedRealmId,
+        checkStart,
+        thisSnapshot,
+        items,
+        bonusStatItems,
+    ){
+        const realmState = await RealmState.get(connectedRealmId);
+        realmState.lastCheck = checkStart;
+        realmState.snapshot = thisSnapshot;
+        realmState.summary ??= {};
+        for (let itemKey in items) {
+            if (!items.hasOwnProperty(itemKey)) {
+                continue;
+            }
+
+            const lastSeen = items[itemKey].q > 0 ?
+                thisSnapshot :
+                (realmState.summary[itemKey]?.[0] ?? thisSnapshot);
+            realmState.summary[itemKey] = [lastSeen, items[itemKey].p, items[itemKey].q];
+        }
+
+        const tooOld = thisSnapshot - Constants.MAX_HISTORY;
+        realmState.snapshots = realmState.snapshots || [];
+        for (let snapshot, x = 0; snapshot = realmState.snapshots[x]; x++) {
+            if (snapshot < tooOld || snapshot === thisSnapshot) {
+                realmState.snapshots.splice(x--, 1);
+            }
+        }
+        realmState.snapshots.push(thisSnapshot);
+        realmState.snapshots.sort((a, b) => a - b);
+
+        realmState.bonusStatItems = bonusStatItems;
+
+        await RealmState.put(connectedRealmId, realmState);
+
+        return realmState.snapshots;
+    }
+
+    /**
      * @param {number} connectedRealmId
      * @return {Promise<object>}
      */
@@ -327,7 +375,7 @@ async function main () {
 
     process.on('message', async (m) => {
         switch (m.action) {
-            case 'start':
+            case 'start': {
                 region = m.data.region;
                 itemList = m.data.itemList;
 
@@ -336,12 +384,22 @@ async function main () {
                     result = await realmProcess.processConnectedRealmAuctions(
                         m.data.connectedRealmId,
                         m.data.thisSnapshot,
-                        m.data.data
+                        m.data.data,
+                    );
+
+                    const snapshots = await realmProcess.updateRealmState(
+                        m.data.connectedRealmId,
+                        m.data.checkStart,
+                        m.data.thisSnapshot,
+                        result.stats,
+                        result.bonusStatItems,
                     );
 
                     process.send({
                         action: 'finish',
-                        data: result,
+                        data: {
+                            snapshots,
+                        },
                     }, undefined, undefined, () => {
                         aliveness.close();
                         process.exit();
@@ -359,6 +417,7 @@ async function main () {
                 }
 
                 break;
+            }
             default:
                 logMsg("received unknown message!");
                 console.log(m);
