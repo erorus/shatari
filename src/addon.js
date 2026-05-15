@@ -135,6 +135,8 @@ async function processRegion(region) {
                 continue;
             }
 
+            const quantity = realmState.summary[itemKeyString][2];
+
             // Only keep the snapshot from the summary, to save a bunch of memory.
             realmState.summary[itemKeyString] = realmState.summary[itemKeyString][0];
 
@@ -147,7 +149,9 @@ async function processRegion(region) {
             } else {
                 let item = itemList[itemKey.itemId];
                 if (!item) {
-                    logMsg("Could not identify item " + itemKey.itemId + " (" + itemKeyString + ")");
+                    if (quantity > 0) {
+                        logMsg("Could not identify item " + itemKey.itemId + " (" + itemKeyString + ")");
+                    }
                     continue;
                 }
                 if (item.stack > 1) {
@@ -188,6 +192,7 @@ async function processRegion(region) {
         usedRealmStates[commodityRealmId] = realmState;
         logMsg(`Scanning ${region} commodity realm ${commodityRealmId}`);
         Object.keys(realmState.summary).forEach(itemKeyString => {
+            const quantity = realmState.summary[itemKeyString][2];
             // Only keep the snapshot from the summary, to save a bunch of memory.
             realmState.summary[itemKeyString] = realmState.summary[itemKeyString][0];
 
@@ -198,7 +203,9 @@ async function processRegion(region) {
 
             let item = itemList[itemKey.itemId];
             if (!item) {
-                logMsg(`Could not identify item ${itemKey.itemId} (${itemKeyString})`);
+                if (quantity > 0) {
+                    logMsg(`Could not identify item ${itemKey.itemId} (${itemKeyString})`);
+                }
                 return;
             }
             if (item.stack <= 1) {
