@@ -88,7 +88,7 @@ module.exports = class ItemList {
             const json = JSON.stringify({request, result});
             waitFor.push(ShatariWriter(filePath, json));
             waitFor.push((async () => {
-                await ShatariWriter(`${filePath}.gz`, await gzip(json));
+                await ShatariWriter(`${filePath}.gz`, await gzip(json, {level: 1}));
             })());
         };
 

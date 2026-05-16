@@ -360,7 +360,7 @@ module.exports = new function () {
             });
             waitFor.push(ShatariWriter(filePath, json));
             waitFor.push((async () => {
-                await ShatariWriter(`${filePath}.gz`, await gzip(json));
+                await ShatariWriter(`${filePath}.gz`, await gzip(json, {level: 1}));
             })());
         }
 
