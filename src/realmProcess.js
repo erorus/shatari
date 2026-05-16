@@ -388,7 +388,7 @@ async function main () {
                         m.data.data,
                     );
 
-                    logMsg(`logging ${Object.keys(result.stats).length} updates in realm state summary`);
+                    logMsg(`logging ${Object.keys(result.stats).length} updates in realm state summary`, m.data.connectedRealmId);
 
                     const snapshots = await realmProcess.updateRealmState(
                         m.data.connectedRealmId,
@@ -398,7 +398,7 @@ async function main () {
                         result.bonusStatItems,
                     );
 
-                    logMsg(`returning to parent`);
+                    logMsg(`returning to parent`, m.data.connectedRealmId);
 
                     process.send({
                         action: 'finish',
