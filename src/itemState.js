@@ -4,7 +4,6 @@ const {gzip, ungzip} = require('node-gzip');
 
 const Constants = require('./constants');
 const ItemKeySerialize = require('./itemKeySerialize');
-const ShatariWriter = require('./shatariWriter');
 
 const DATA_DIR = Constants.DATA_DIR;
 
@@ -39,19 +38,70 @@ module.exports = new function () {
         try {
             buf = await ungzip(compressed);
         } catch (e) {
-            // We retry after the first fail, since some other process may be writing to this.
-            await new Promise(resolve => setTimeout(resolve, 500));
+            console.log(`Realm ${connectedRealmId} Error unzipping item ${itemKey}`);
+            console.log(e);
 
-            try {
-                buf = await ungzip(await fs.readFile(path));
-            } catch (e) {
-                console.log("Realm " + connectedRealmId + " Error unzipping item " + itemKey);
-                console.log(e);
-
-                return {};
-            }
+            return {};
         }
 
+        return readBuf(buf);
+    }
+
+    /**
+     * Reads from disk and returns the local state object for the given connected realm's item, and the file handle
+     * for later writes.
+     *
+     * @param {number} connectedRealmId
+     * @param {string} itemKey
+     * @return {Promise<{itemState: object, fileHandle: object}>}
+     */
+    this.getWithHandle = async function (connectedRealmId, itemKey) {
+        const path = getPath(connectedRealmId, itemKey);
+        let compressed;
+        let fileHandle;
+
+        try {
+            fileHandle = await fs.open(path, 'r+');
+            compressed = await fileHandle.readFile();
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                throw error;
+            }
+
+            try {
+                fileHandle = await fs.open(path, 'w');
+            } catch (error) {
+                if (error.code !== 'ENOENT') {
+                    throw error;
+                }
+
+                await fs.mkdir(Path.dirname(path), {recursive: true});
+                fileHandle = await fs.open(path, 'w');
+            }
+
+            return {itemState: {}, fileHandle};
+        }
+
+        let buf;
+        try {
+            buf = await ungzip(compressed);
+        } catch (e) {
+            console.log(`Realm ${connectedRealmId} Error unzipping item ${itemKey}`);
+            console.log(e);
+
+            return {itemState: {}, fileHandle};
+        }
+
+        return {itemState: readBuf(buf), fileHandle};
+    }
+
+    /**
+     * Reads the uncompressed item state buffer data, returning an item state object.
+     *
+     * @param {Buffer} buf
+     * @return {object}
+     */
+    function readBuf(buf) {
         let cursorPosition = 0;
         let advance = function (size) {
             let res = cursorPosition;
@@ -148,15 +198,12 @@ module.exports = new function () {
     }
 
     /**
-     * Writes to disk the given state for the given connected realm's item.
+     * Writes the given state to the given open file handle.
      *
-     * @param {number} connectedRealmId
-     * @param {string} itemKey
+     * @param {object} fileHandle
      * @param {object} state
      */
-    this.put = async function (connectedRealmId, itemKey, state) {
-        const path = getPath(connectedRealmId, itemKey);
-
+    this.put = async function (fileHandle, state) {
         // Start off with version number in front.
         let bufferSize = 1;
         // 4 bytes each for snapshot timestamp, price, quantity
@@ -240,7 +287,9 @@ module.exports = new function () {
 
         const compressed = await gzip(buf);
 
-        await ShatariWriter(path, compressed);
+        await fileHandle.write(compressed, 0, compressed.length, 0);
+        await fileHandle.truncate(compressed.length);
+        await fileHandle.close();
     }
 
     // ------- //

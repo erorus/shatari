@@ -303,7 +303,7 @@ const realmProcess = new function () {
      * @param {object} stats
      */
     async function updateRealmItem(connectedRealmId, itemKey, thisSnapshot, stats) {
-        const itemState = await ItemState.get(connectedRealmId, itemKey);
+        const {itemState, fileHandle} = await ItemState.getWithHandle(connectedRealmId, itemKey);
 
         itemState.auctions = [];
         const auc = stats.auc || {};
@@ -367,7 +367,7 @@ const realmProcess = new function () {
             }
         }
 
-        await ItemState.put(connectedRealmId, itemKey, itemState);
+        await ItemState.put(fileHandle, itemState);
     }
 };
 
