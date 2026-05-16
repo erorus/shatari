@@ -512,10 +512,18 @@ function nextCheckTimestamp(realmState) {
         return 0;
     }
 
-    const snapshots = realmState.snapshots || [];
-    let minInterval = MAX_SNAPSHOT_INTERVAL;
-    for (let x = Math.max(1, snapshots.length - SNAPSHOTS_FOR_INTERVAL); x < snapshots.length; x++) {
-        minInterval = Math.min(minInterval, snapshots[x] - snapshots[x - 1]);
+    let minInterval;
+    {
+        const snapshots = realmState.snapshots || [];
+        const intervals = snapshots
+            .slice(-1 * SNAPSHOTS_FOR_INTERVAL)
+            .map((value, index, array) => index === 0 ? null : (value - array[index - 1]));
+        intervals[0] = MAX_SNAPSHOT_INTERVAL;
+
+        const windows = intervals
+            .map((value, index, array) => Math.max(...array.slice(index, index + 3)));
+
+        minInterval = Math.min(MAX_SNAPSHOT_INTERVAL, ...windows);
     }
 
     // When we expect the next update to land.
