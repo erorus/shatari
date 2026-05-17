@@ -7,16 +7,8 @@ const ItemKeySerialize = require('./itemKeySerialize');
 const ShatariWriter = require('./shatariWriter');
 const {getRegionForRealm} = require("./commodityRealm");
 const ItemList = require("./api/ItemList");
-const RealmListReader = require("./api/realmListReader");
 
 const DATA_DIR = Constants.DATA_DIR;
-
-const STAT_API_NAMES = {
-    61: 'speed',
-    62: 'leech',
-    63: 'avoidance',
-    64: 'indestructible',
-};
 
 module.exports = new function () {
     const COPPER_SILVER = 100;
@@ -296,7 +288,18 @@ module.exports = new function () {
      * @return {Promise[]}
      */
     function putApiData(connectedRealmId, state) {
-        const waitFor = [];
+        const commodityRegion = getRegionForRealm(connectedRealmId);
+        if (!commodityRegion) {
+            const paths = [
+                Path.resolve(Constants.API_DIR, 'realm', 'stats', `${connectedRealmId}.json.stale`),
+                Path.resolve(Constants.API_DIR, 'realm', 'items', 'full', `${connectedRealmId}.json.stale`),
+                Path.resolve(Constants.API_DIR, 'realm', 'items', 'base', `${connectedRealmId}.json.stale`),
+                Path.resolve(Constants.API_DIR, 'realm', 'pets', 'full', `${connectedRealmId}.json.stale`),
+                Path.resolve(Constants.API_DIR, 'realm', 'pets', 'base', `${connectedRealmId}.json.stale`),
+            ];
+
+            return paths.map(path => ShatariWriter(path, '', false));
+        }
 
         {
             const list = new ItemList(state.snapshot);
@@ -316,54 +319,7 @@ module.exports = new function () {
                 list.add(itemKeyString, itemData);
             });
 
-
-            const commodityRegion = getRegionForRealm(connectedRealmId);
-            if (commodityRegion) {
-                return list.save('region', commodityRegion, true);
-            }
-
-            waitFor.push(...list.save('realm', connectedRealmId, false));
+            return list.save(commodityRegion, true);
         }
-
-        {
-            const data = {};
-            const bonusStatItems = state.bonusStatItems ?? {};
-
-            Object.entries(STAT_API_NAMES).forEach(([statIdString, statName]) => {
-                data[statName] = bonusStatItems[statIdString]?.map(itemKeyString => {
-                    const itemKey = ItemKeySerialize.parse(itemKeyString);
-
-                    const result = {
-                        item: itemKey.itemId,
-                        level: itemKey.itemLevel,
-                    };
-                    if (itemKey.itemSuffix) {
-                        result.suffix = itemKey.itemSuffix;
-                    }
-
-                    return result;
-                }) ?? [];
-            });
-
-            const filePath = Path.resolve(Constants.API_DIR, 'realm', 'stats', `${connectedRealmId}.json`);
-            const json = JSON.stringify({
-                request: {
-                    region: RealmListReader.getRegionByConnectedId(connectedRealmId),
-                    realms: RealmListReader.getRealmSlugsByConnectedId(connectedRealmId),
-                    list: 'stats',
-                },
-                result: {
-                    lastUpdated: new Date(),
-                    snapshot: new Date(state.snapshot),
-                    stats: data,
-                },
-            });
-            waitFor.push(ShatariWriter(filePath, json));
-            waitFor.push((async () => {
-                await ShatariWriter(`${filePath}.gz`, await gzip(json, {level: 1}));
-            })());
-        }
-
-        return waitFor;
     }
 };

@@ -3,7 +3,6 @@ const ItemKeySerialize = require("../itemKeySerialize");
 const Constants = require("../constants");
 const ShatariWriter = require("../shatariWriter");
 const {gzip} = require("node-gzip");
-const RealmListReader = require("./realmListReader");
 
 module.exports = class ItemList {
     #items = {};
@@ -56,26 +55,17 @@ module.exports = class ItemList {
         Object.assign(target, itemData);
     }
 
-    save(stateType, fileName, isCommodities) {
+    save(region, isCommodities) {
         const waitFor = [];
 
-        let region;
-        let realms;
-        if (stateType === 'region') {
-            region = fileName;
-        } else if (stateType === 'realm') {
-            region = RealmListReader.getRegionByConnectedId(fileName);
-            realms = RealmListReader.getRealmSlugsByConnectedId(fileName);
-        }
-
         const saveOne = (itemType, size, data) => {
-            const filePath = Path.resolve(Constants.API_DIR, stateType, itemType, size, `${fileName}.json`);
+            const filePath = Path.resolve(Constants.API_DIR, 'region', itemType, size, `${region}.json`);
 
-            const request = {};
-            if (region) request.region = region;
-            if (realms) request.realms = realms;
-            request.list = itemType;
-            request.detail = size;
+            const request = {
+                region,
+                list: itemType,
+                detail: size,
+            };
 
             const result = {
                 lastUpdated: new Date(),

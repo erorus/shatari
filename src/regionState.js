@@ -225,6 +225,6 @@ module.exports = new function () {
             list.add(itemKeyString, itemData);
         });
 
-        return list.save('region', region, false);
+        return list.save(region, false);
     }
 };
