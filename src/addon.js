@@ -434,6 +434,7 @@ async function generateBonusToNameId() {
     await luaStream.write(Buffer.from([0xEF, 0xBB, 0xBF]));
     await luaStream.write(`
 local addonName, addonTable = ...
+local GetItemInfo = C_Item.GetItemInfo
 
 local namesByBonus = {${namesLua}}
 

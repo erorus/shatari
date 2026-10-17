@@ -48,6 +48,7 @@ local prettyName = '|cFF33FF99' .. L["Oribos Exchange"] .. '|r'
 local floor = math.floor
 local tinsert, tonumber = tinsert, tonumber
 local strLen, strByte, strSub = string.len, string.byte, string.sub
+local GetItemInfoInstant, GetDetailedItemLevelInfo = C_Item.GetItemInfoInstant, C_Item.GetDetailedItemLevelInfo
 local PET_CAGE = 82800
 local tooltipsSettings = {}
 
@@ -351,7 +352,7 @@ function OETooltip(...)
 
         local line = strmatch(debugstack(2, 1, 0), "[Aa][Dd][Dd][Oo][Nn][Ss]\\([^\\]+)")
         if line and line ~= addonName then
-            local callingName, callingTitle = GetAddOnInfo(line)
+            local callingName, callingTitle = C_AddOns.GetAddOnInfo(line)
             if callingName then
                 callingName = callingTitle or callingName
                 local status = tooltipsEnabled and L["enabled"] or L["disabled"]
